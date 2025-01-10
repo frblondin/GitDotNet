@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<PackageId>GitDotNet.Indexing.Realm</PackageId>
+		<DebugSymbols>true</DebugSymbols>
+        <DebugType>pdbonly</DebugType>
+        <DebugSymbols>true</DebugSymbols>
+	</PropertyGroup>
+
+    <ItemGroup>
+        <None Include="..\..\GitDotNet.png" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="FlexLabs.EntityFrameworkCore.Upsert" />
+      <PackageReference Include="LangChain.Core" />
+      <PackageReference Include="LangChain.Databases.Sqlite" />
+      <PackageReference Include="LangChain.Providers.Ollama" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\GitDotNet\GitDotNet.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="vec0.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
+</Project>
