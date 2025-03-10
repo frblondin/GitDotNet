@@ -18,7 +18,7 @@ public class DumpAllHashes(GitConnectionProvider factory) : BackgroundService
             try
             {
                 var entry = await connection.Objects.GetAsync<Entry>(id);
-                //Console.WriteLine(entry);
+                WriteLine(entry);
             }
             catch (Exception ex)
             {
@@ -26,13 +26,5 @@ public class DumpAllHashes(GitConnectionProvider factory) : BackgroundService
             }
         }
         await StopAsync(stoppingToken);
-    }
-
-    private static void Print(IEnumerable<string> entries)
-    {
-        foreach (var entry in entries)
-        {
-            WriteLine(entry);
-        }
     }
 }

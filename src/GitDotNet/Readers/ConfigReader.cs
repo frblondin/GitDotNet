@@ -22,7 +22,7 @@ public class ConfigReader
     /// <summary>Gets the path to the Git configuration file.</summary>
     public string Path { get; }
 
-    private IImmutableDictionary<string, IImmutableDictionary<string, string>> LoadConfig()
+    private ImmutableDictionary<string, IImmutableDictionary<string, string>> LoadConfig()
     {
         if (!_fileSystem.File.Exists(Path))
         {
@@ -43,25 +43,13 @@ public class ConfigReader
                 continue; // Skip empty lines and comments
             }
 
-            if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
+            if (trimmedLine.StartsWith('[') && trimmedLine.EndsWith(']'))
             {
-                if (currentSection != null)
-                {
-                    sectionsBuilder[currentSection] = currentSectionBuilder.ToImmutable();
-                }
-
-                currentSection = trimmedLine[1..^1].Trim();
-                currentSectionBuilder = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase);
+                CreateNewSection(sectionsBuilder, ref currentSection, ref currentSectionBuilder, trimmedLine);
             }
             else if (currentSection != null)
             {
-                var separatorIndex = trimmedLine.IndexOf('=');
-                if (separatorIndex > 0)
-                {
-                    var key = trimmedLine[..separatorIndex].Trim();
-                    var value = trimmedLine[(separatorIndex + 1)..].Trim();
-                    currentSectionBuilder[key] = value;
-                }
+                AddToSection(currentSectionBuilder, trimmedLine);
             }
         }
 
@@ -73,12 +61,34 @@ public class ConfigReader
         return sectionsBuilder.ToImmutable();
     }
 
+    private static void CreateNewSection(ImmutableDictionary<string, IImmutableDictionary<string, string>>.Builder sectionsBuilder, ref string? currentSection, ref ImmutableDictionary<string, string>.Builder currentSectionBuilder, string trimmedLine)
+    {
+        if (currentSection != null)
+        {
+            sectionsBuilder[currentSection] = currentSectionBuilder.ToImmutable();
+        }
+
+        currentSection = trimmedLine[1..^1].Trim();
+        currentSectionBuilder = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static void AddToSection(ImmutableDictionary<string, string>.Builder currentSectionBuilder, string trimmedLine)
+    {
+        var separatorIndex = trimmedLine.IndexOf('=');
+        if (separatorIndex > 0)
+        {
+            var key = trimmedLine[..separatorIndex].Trim();
+            var value = trimmedLine[(separatorIndex + 1)..].Trim();
+            currentSectionBuilder[key] = value;
+        }
+    }
+
     /// <summary>Gets the value of a property in a specified section.</summary>
     /// <param name="section">The section name.</param>
     /// <param name="property">The property name.</param>
     /// <param name="throwIfNull">Indicates whether to throw an exception if the property is not found.</param>
     /// <returns>The property value, or null if not found and throwIfNull is false.</returns>
-    public string GetProperty(string section, string property, bool throwIfNull = true)
+    public string? GetProperty(string section, string property, bool throwIfNull = true)
     {
         if (_sections.TryGetValue(section, out var properties) && properties.TryGetValue(property, out var value))
         {
@@ -92,18 +102,18 @@ public class ConfigReader
     }
 
     /// <summary>Internal variable identifying the repository format and layout version. See
-    /// <see cref="gitrepository-layout" href="https://git-scm.com/docs/gitrepository-layout"/>.</summary>
+    /// <see href="https://git-scm.com/docs/gitrepository-layout"/>.</summary>
     [ExcludeFromCodeCoverage]
     public string? RepositoryFormatVersion => GetProperty("core", "repositoryformatversion");
 
     /// <summary>
     /// If true this repository is assumed to be bare and has no working directory associated with it.
     /// If this is the case a number of commands that require a working directory will be disabled, such as
-    /// <see cref="git-add" href="https://git-scm.com/docs/git-add"/> or <see cref="git-merge" href="https://git-scm.com/docs/git-merge"/>.
+    /// <see href="https://git-scm.com/docs/git-add"/> or <see href="https://git-scm.com/docs/git-merge"/>.
     /// </summary>
     /// <remarks>
-    /// This setting is automatically guessed by <see cref="git-clone" href="https://git-scm.com/docs/git-clone"/> or
-    /// <see cref="git-init" href="https://git-scm.com/docs/git-init"/> when the repository was created.By default a
+    /// This setting is automatically guessed by <see href="https://git-scm.com/docs/git-clone"/> or
+    /// <see href="https://git-scm.com/docs/git-init"/> when the repository was created.By default a
     /// repository that ends in "/.git" is assumed to be not bare (bare = false), while all other repositories are assumed to be bare(bare = true).
     /// </remarks>
     [ExcludeFromCodeCoverage]
@@ -115,8 +125,8 @@ public class ConfigReader
     /// when Git expects "Makefile", Git will assume it is really the same file, and continue to remember it as "Makefile".
     /// </summary>
     /// <remarks>
-    /// The default is false, except <see cref="git-clone" href="https://git-scm.com/docs/git-clone"/> or
-    /// <see cref="git-init" href="https://git-scm.com/docs/git-init"/> will probe and set core.ignoreCase true if appropriate when the repository is created.
+    /// The default is false, except <see href="https://git-scm.com/docs/git-clone"/> or
+    /// <see href="https://git-scm.com/docs/git-init"/> will probe and set core.ignoreCase true if appropriate when the repository is created.
     /// Git relies on the proper configuration of this variable for your operating and file system.Modifying this value may result in unexpected behavior.
     /// </remarks>
     [ExcludeFromCodeCoverage]
@@ -135,7 +145,7 @@ public class ConfigReader
     /// This variable can be set to input, in which case no output conversion is performed.
     /// </summary>
     /// <remarks>
-    /// See <see cref="git-config" href="https://git-scm.com/docs/git-config#Documentation/git-config.txt-coreautocrlf"/>.
+    /// See <see href="https://git-scm.com/docs/git-config#Documentation/git-config.txt-coreautocrlf"/>.
     /// </remarks>
     [ExcludeFromCodeCoverage]
     public string? UseAutoCrlf => GetProperty("core", "autocrlf", throwIfNull: false);
@@ -145,7 +155,7 @@ public class ConfigReader
     /// Defaults to true.
     /// </summary>
     /// <remarks>
-    /// See <see cref="git-commit-graph" href="https://git-scm.com/docs/git-commit-graph"/>.
+    /// See <see href="https://git-scm.com/docs/git-commit-graph"/>.
     /// </remarks>
     [ExcludeFromCodeCoverage]
     public bool UseCommitGraph => GetProperty("core", "commitGraph", throwIfNull: false)?.Equals("true") ?? true;

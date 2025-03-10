@@ -7,6 +7,7 @@ internal class Utf8JsonlWriter : IDisposable
 {
     private readonly StreamWriter _textWriter;
     private long _jsonlPosition;
+    private bool _disposedValue;
 
     public Utf8JsonlWriter(Stream stream)
     {
@@ -38,9 +39,25 @@ internal class Utf8JsonlWriter : IDisposable
         _textWriter.BaseStream.Position = _jsonlPosition;
     }
 
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                JsonWriter.Dispose();
+                _textWriter.Dispose();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
+    /// <inheritdoc/>
     public void Dispose()
     {
-        JsonWriter.Dispose();
-        _textWriter.Dispose();
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }

@@ -7,7 +7,7 @@ namespace GitDotNet.Readers;
 
 internal delegate Task<PackIndexReader> PackIndexFactory(string path);
 
-internal class PackIndexReader(string path, int version, int[] fanout, byte[] packChecksum, byte[] checksum, IFileSystem fileSystem) : IDisposable
+internal class PackIndexReader(string path, int version, int[] fanout, byte[] packChecksum, byte[] checksum, IFileSystem fileSystem)
 {
     private const int FanOutTableSize = 256;
 
@@ -96,7 +96,7 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         using var stream = new MemoryStream(_data, writable: false);
         stream.Seek(SortedObjectNamesOffset + index * 20, SeekOrigin.Begin);
         var hash = new byte[Objects.HashLength];
-        await stream.ReadAsync(hash.AsMemory(0, Objects.HashLength));
+        await stream.ReadExactlyAsync(hash.AsMemory(0, Objects.HashLength));
         return hash;
     }
 
@@ -193,10 +193,5 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         }
 
         return version;
-    }
-
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
     }
 }

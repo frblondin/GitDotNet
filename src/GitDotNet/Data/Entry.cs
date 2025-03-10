@@ -34,6 +34,7 @@ public abstract record class Entry : IEquatable<Entry>
     /// <inheritdoc/>
     public virtual bool Equals(Entry? other) => other is not null && Id.Equals(other.Id);
 
+    /// <inheritdoc/>
     public override int GetHashCode() => GetHashCode(Id.Hash);
 
     private static int GetHashCode(IEnumerable<byte> array)

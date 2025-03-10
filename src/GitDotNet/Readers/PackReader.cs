@@ -254,7 +254,6 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, IOptions<G
         if (!_disposed.IsCancellationRequested) _disposed.Cancel();
         _disposed.Dispose();
         offsetStreamReader.Dispose();
-        _index?.Dispose();
         GC.SuppressFinalize(this);
     }
 }

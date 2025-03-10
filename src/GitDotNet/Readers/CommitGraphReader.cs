@@ -2,9 +2,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.IO.Abstractions;
-using System.Runtime.CompilerServices;
 using System.Text;
 using GitDotNet.Tools;
 
@@ -22,6 +20,7 @@ internal partial class CommitGraphReader : IDisposable
 
     private readonly IObjectResolver _objectResolver;
     private readonly IList<GraphFile> _graphFiles;
+    private bool _disposedValue;
 
     private CommitGraphReader(IObjectResolver objectResolver,
                               IList<GraphFile> graphFiles)
@@ -219,12 +218,31 @@ internal partial class CommitGraphReader : IDisposable
         }
     }
 
-    public void Dispose()
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                DisposeGraphs();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
+    private void DisposeGraphs()
     {
         foreach (var graph in _graphFiles)
         {
             graph.Dispose();
         }
+    }
+
+    public void Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
         GC.SuppressFinalize(this);
     }
 }

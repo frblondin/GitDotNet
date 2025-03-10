@@ -5,6 +5,7 @@ using GitDotNet.Tools;
 
 namespace GitDotNet;
 
+#pragma warning disable CA1822 // Mark members as static
 public class ArchiveBenchmark
 {
     [Benchmark]

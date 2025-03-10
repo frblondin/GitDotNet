@@ -85,7 +85,6 @@ public partial class GitConnection
                 if (renamed is not null)
                 {
                     // From then on, the entry will be known by the new path
-                    entry = renamed.New;
                     entryPath = renamed.NewPath!;
                 }
                 else
@@ -114,26 +113,39 @@ public partial class GitConnection
     {
         if (options.SortBy.HasFlag(LogTraversal.FirstParentOnly))
         {
-            var parents = await currentCommit.GetParentsAsync();
-            if (parents.Count > 0)
-            {
-                var parentHash = parents[0].Id;
-                if (processedCommits.Add(parentHash)) commitsToProcess.Enqueue(parentHash);
-            }
+            await HandleFirstParentCommitAsync(commitsToProcess, processedCommits, currentCommit);
         }
         else
         {
-            var parents = (IEnumerable<CommitEntry>)await currentCommit.GetParentsAsync();
-            if (options.SortBy.HasFlag(LogTraversal.Time)) parents = parents.OrderBy(p => p.CommitTime);
-            if (options.SortBy.HasFlag(LogTraversal.Reverse)) parents = parents.Reverse();
+            await HandleCommitParentsAsync(options, commitsToProcess, processedCommits, currentCommit);
+        }
+    }
 
-            foreach (var parent in parents)
+    private static async Task HandleFirstParentCommitAsync(Queue<HashId> commitsToProcess, HashSet<HashId> processedCommits, CommitEntry currentCommit)
+    {
+        var parents = await currentCommit.GetParentsAsync();
+        if (parents.Count > 0)
+        {
+            var parentHash = parents[0].Id;
+            if (processedCommits.Add(parentHash))
+                commitsToProcess.Enqueue(parentHash);
+        }
+    }
+
+    private static async Task HandleCommitParentsAsync(LogOptions options, Queue<HashId> commitsToProcess, HashSet<HashId> processedCommits, CommitEntry currentCommit)
+    {
+        var parents = (IEnumerable<CommitEntry>)await currentCommit.GetParentsAsync();
+        if (options.SortBy.HasFlag(LogTraversal.Time))
+            parents = parents.OrderBy(p => p.CommitTime);
+        if (options.SortBy.HasFlag(LogTraversal.Reverse))
+            parents = parents.Reverse();
+
+        foreach (var parent in parents.Select(p => p.Id))
+        {
+            var parentHash = parent;
+            if (processedCommits.Add(parentHash))
             {
-                var parentHash = parent.Id;
-                if (processedCommits.Add(parentHash))
-                {
-                    commitsToProcess.Enqueue(parentHash);
-                }
+                commitsToProcess.Enqueue(parentHash);
             }
         }
     }

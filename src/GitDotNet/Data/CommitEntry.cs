@@ -15,7 +15,7 @@ public record class CommitEntry : Entry
     private readonly IObjectResolver _objectResolver;
     private readonly Lazy<byte[]> _data;
     internal Lazy<Content> _content;
-    private HashId? _treeId;
+    private readonly HashId? _treeId;
     private TreeEntry? _tree;
     internal IList<HashId>? _parentIds;
     private readonly DateTimeOffset? _commitTime;
@@ -47,7 +47,7 @@ public record class CommitEntry : Entry
     /// <summary>Gets the committer of the commit.</summary>
     public Signature? Committer => _content.Value.Committer;
 
-    internal DateTimeOffset CommitTime => _commitTime ?? Committer.Timestamp;
+    internal DateTimeOffset? CommitTime => _commitTime ?? Committer?.Timestamp;
 
     /// <summary>Gets the commit message.</summary>
     public string Message => _content.Value.Message;

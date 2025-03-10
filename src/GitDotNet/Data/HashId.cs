@@ -7,9 +7,9 @@ namespace GitDotNet;
 
 /// <summary>Represents a hash identifier.</summary>
 #if NET8_0
-public partial class HashId : IEquatable<HashId>, IComparable<HashId>
+public sealed partial class HashId : IEquatable<HashId>, IComparable<HashId>
 #else
-public partial class HashId : IEquatable<HashId>, IComparable<HashId>, IComparable<Span<byte>>
+public sealed partial class HashId : IEquatable<HashId>, IComparable<HashId>, IComparable<Span<byte>>
 #endif
 {
     /// <summary>Gets an empty <see cref="HashId"/>.</summary>
@@ -95,6 +95,24 @@ public partial class HashId : IEquatable<HashId>, IComparable<HashId>, IComparab
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as HashId);
+
+    /// <inheritdoc/>
+    public static bool operator ==(HashId? left, HashId? right) => Equals(left, right);
+
+    /// <inheritdoc/>
+    public static bool operator !=(HashId? left, HashId? right) => !Equals(left, right);
+
+    /// <inheritdoc/>
+    public static bool operator <(HashId? left, HashId? right) => left is not null && right is not null && left.CompareTo(right) < 0;
+
+    /// <inheritdoc/>
+    public static bool operator <=(HashId? left, HashId? right) => left is not null && right is not null && left.CompareTo(right) <= 0;
+
+    /// <inheritdoc/>
+    public static bool operator >(HashId? left, HashId? right) => left is not null && right is not null && left.CompareTo(right) > 0;
+
+    /// <inheritdoc/>
+    public static bool operator >=(HashId? left, HashId? right) => left is not null && right is not null && left.CompareTo(right) >= 0;
 
     /// <inheritdoc/>
     public override string ToString() => _hashString ??= ByteArrayToHex();

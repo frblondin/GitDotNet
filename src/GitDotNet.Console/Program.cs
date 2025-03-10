@@ -11,7 +11,7 @@ for (int i = 0; i < backgroundServices.Count; i++)
 {
     Console.WriteLine($"{i + 1}. {backgroundServices[i].Name}");
 }
-var input = InfoInput.InputData($"Enter your choice (1 to {backgroundServices.Count})", i =>
+InfoInput.InputData($"Enter your choice (1 to {backgroundServices.Count})", i =>
 {
     if (int.TryParse(i, out var selectedIndex) &&
         selectedIndex >= 1 && selectedIndex <= backgroundServices.Count)
@@ -29,4 +29,4 @@ builder.Services
     .AddSingleton(typeof(IHostedService), hostedServiceType!);
 
 using var host = builder.Build();
-host.Run();
+await host.RunAsync();

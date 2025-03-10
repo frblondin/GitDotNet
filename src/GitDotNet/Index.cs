@@ -9,6 +9,7 @@ internal delegate Index IndexFactory(string repositoryPath, IObjectResolver obje
 public class Index : IDisposable
 {
     private readonly IndexReader _indexReader;
+    private bool _disposedValue;
 
     internal Index(string repositoryPath, IObjectResolver objectResolver, IndexReaderFactory indexReaderFactory, IFileSystem fileSystem)
     {
@@ -24,10 +25,25 @@ public class Index : IDisposable
     /// <returns>A task that represents the asynchronous operation. The task result contains a list of <see cref="IndexEntry"/> instances.</returns>
     public async Task<IList<IndexEntry>> GetEntriesAsync() => await _indexReader.GetEntriesAsync();
 
+    /// <summary>Disposes the index file.</summary>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                _indexReader.Dispose();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
     /// <inheritdoc/>
     public void Dispose()
     {
-        _indexReader.Dispose();
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
         GC.SuppressFinalize(this);
     }
 }

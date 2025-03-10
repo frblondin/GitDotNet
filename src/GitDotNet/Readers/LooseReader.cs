@@ -131,7 +131,7 @@ internal class LooseReader(string path, IFileSystem fileSystem)
                 position++;
                 if (b == stopChar)
                     break;
-                buffer[bytesRead++] = (byte)b;
+                buffer[bytesRead++] = b;
             }
             return parser(buffer, bytesRead);
         }

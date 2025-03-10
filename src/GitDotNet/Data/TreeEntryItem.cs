@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 
 namespace GitDotNet;
@@ -103,6 +104,7 @@ public record class TreeEntryItem
         }
     }
 
+    [ExcludeFromCodeCoverage]
     internal async Task GetAllBlobEntriesAsync<TResult>(Channel<TResult> channel, Func<(GitPath Path, TreeEntryItem BlobEntry), TResult> func, Stack<string> path)
     {
         if (Mode.EntryType == EntryType.Blob)

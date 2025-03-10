@@ -22,6 +22,7 @@ public partial class Objects : IDisposable, IObjectResolver
     private readonly IMemoryCache _memoryCache;
     private readonly IFileSystem _fileSystem;
     private readonly CancellationTokenSource _disposed = new();
+    private bool _disposedValue;
 
     internal Objects(string repositoryPath, bool useReadCommitGraph,
                      IOptions<GitConnection.Options> options,
@@ -158,13 +159,13 @@ public partial class Objects : IDisposable, IObjectResolver
     {
         var foundPack = default(PackReader?);
         var foundIndex = -1;
-        foreach (var pack in PackReaders.Values)
+        foreach (var pack in PackReaders.Values.Select(p => p.Value))
         {
-            var index = await pack.Value.IndexOfAsync(id);
+            var index = await pack.IndexOfAsync(id);
             if (index != -1)
             {
                 if (id.Hash.Count < HashLength && foundPack is not null) throw new AmbiguousHashException();
-                foundPack = pack.Value;
+                foundPack = pack;
                 foundIndex = index;
                 if (id.Hash.Count >= HashLength) return (foundPack, foundIndex);
             }
@@ -185,12 +186,28 @@ public partial class Objects : IDisposable, IObjectResolver
     internal Entry CreateEntry(UnlinkedEntry entry) =>
         CreateEntry(entry.Type, entry.Id, entry.Data);
 
+    /// <summary>Releases all resources used by the current instance of the <see cref="Objects"/> class.</summary>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                if (!_disposed.IsCancellationRequested)
+                    _disposed.Cancel();
+                _disposed.Dispose();
+                DisposePacks();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
     /// <inheritdoc/>
     public void Dispose()
     {
-        if (!_disposed.IsCancellationRequested) _disposed.Cancel();
-        _disposed.Dispose();
-        DisposePacks();
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
         GC.SuppressFinalize(this);
     }
 

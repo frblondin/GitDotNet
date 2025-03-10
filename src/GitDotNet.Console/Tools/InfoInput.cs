@@ -7,15 +7,8 @@ internal static class InfoInput
 {
     public const string RepositoryPathInput = "Path of repository";
 
-    private static readonly string _filePath;
-    private static readonly Dictionary<string, string> _inputHistory;
-
-    static InfoInput()
-    {
-        var assemblyPath = Assembly.GetExecutingAssembly().Location;
-        _filePath = Path.ChangeExtension(assemblyPath, ".last");
-        _inputHistory = LoadInputHistory();
-    }
+    private static readonly string _filePath = Path.ChangeExtension(Assembly.GetExecutingAssembly().Location, ".last");
+    private static readonly Dictionary<string, string> _inputHistory = LoadInputHistory();
 
     public static string InputData(string prompt, Predicate<string>? validate = null, string @default = "")
     {

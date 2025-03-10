@@ -10,6 +10,8 @@ internal delegate IndexReader IndexReaderFactory(string path, IObjectResolver ob
 
 internal class IndexReader(int version, IObjectResolver objectResolver, IFileOffsetStreamReader offsetStreamReader) : IDisposable
 {
+    private bool _disposedValue;
+
     /// <summary>Gets the version of the index file.</summary>
     public int Version => version;
 
@@ -45,7 +47,7 @@ internal class IndexReader(int version, IObjectResolver objectResolver, IFileOff
             var result = ImmutableList.CreateBuilder<IndexEntry>();
             for (int i = 0; i < entryCount; i++)
             {
-                var entry = await ReadEntryAsync(stream, objectResolver, version, result.LastOrDefault());
+                var entry = await ReadEntryAsync(stream, objectResolver, version);
                 result.Add(entry);
             }
             return result.ToImmutable();
@@ -58,11 +60,11 @@ internal class IndexReader(int version, IObjectResolver objectResolver, IFileOff
 
     private static int ReadVersion(Stream stream, byte[] fourByteBuffer)
     {
-        stream.Read(fourByteBuffer.AsSpan(0, 4));
+        stream.ReadExactly(fourByteBuffer.AsSpan(0, 4));
         return BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
     }
 
-    private static async Task<IndexEntry> ReadEntryAsync(Stream stream, IObjectResolver objectResolver, int version, IndexEntry? previousEntry)
+    private static async Task<IndexEntry> ReadEntryAsync(Stream stream, IObjectResolver objectResolver, int version)
     {
         var fourByteBuffer = ArrayPool<byte>.Shared.Rent(4);
         try
@@ -80,19 +82,19 @@ internal class IndexReader(int version, IObjectResolver objectResolver, IFileOff
             var mTimeNano = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
             read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
-            var dev = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
+            BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
             read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
-            var ino = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
+            BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
             read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
             var mode = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
             read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
-            var uid = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
+            BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
             read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
-            var gid = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
+            BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
             read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
             var fileSize = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
@@ -140,7 +142,7 @@ internal class IndexReader(int version, IObjectResolver objectResolver, IFileOff
     private static DateTime ConvertCtimeToDateTime(int ctime, int ctimeNano)
     {
         // Unix epoch start time
-        var epoch = new DateTimeOffset(1970, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var epoch = DateTimeOffset.UnixEpoch;
         // Add the ctime seconds to the epoch
         var dateTimeOffset = epoch.AddSeconds(ctime);
         // Add the nanoseconds as ticks
@@ -149,10 +151,23 @@ internal class IndexReader(int version, IObjectResolver objectResolver, IFileOff
         return dateTimeOffset.UtcDateTime;
     }
 
-    /// <inheritdoc/>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                offsetStreamReader.Dispose();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
     public void Dispose()
     {
-        offsetStreamReader.Dispose();
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
         GC.SuppressFinalize(this);
     }
 }

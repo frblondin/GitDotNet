@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 using GitDotNet.Readers;
 
@@ -64,6 +65,7 @@ public record class TreeEntry : Entry
     /// <param name="channel">The channel to write the results to.</param>
     /// <param name="func">The function to apply to each blob entry.</param>
     /// <returns>An enumerable of all blob entries in the tree.</returns>
+    [ExcludeFromCodeCoverage]
     public async Task GetAllBlobEntriesAsync<TResult>(Channel<TResult> channel, Func<(GitPath Path, TreeEntryItem BlobEntry), TResult> func)
     {
         foreach (var child in Children)

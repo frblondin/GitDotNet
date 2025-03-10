@@ -1,7 +1,7 @@
 namespace GitDotNet;
 
 /// <summary>Represents a Git path composed of multiple path chunks.</summary>
-public class GitPath : IEquatable<GitPath>, IComparable<GitPath>
+public sealed class GitPath : IEquatable<GitPath>, IComparable<GitPath>
 {
     private readonly string[] _pathChunks;
     private string? _pathString;
@@ -70,6 +70,24 @@ public class GitPath : IEquatable<GitPath>, IComparable<GitPath>
         }
         return _pathChunks.Length.CompareTo(other._pathChunks.Length);
     }
+
+    /// <inheritdoc/>
+    public static bool operator ==(GitPath? left, GitPath? right) => Equals(left, right);
+
+    /// <inheritdoc/>
+    public static bool operator !=(GitPath? left, GitPath? right) => !Equals(left, right);
+
+    /// <inheritdoc/>
+    public static bool operator <(GitPath? left, GitPath? right) => left is not null && right is not null && left.CompareTo(right) < 0;
+
+    /// <inheritdoc/>
+    public static bool operator <=(GitPath? left, GitPath? right) => left is not null && right is not null && left.CompareTo(right) <= 0;
+
+    /// <inheritdoc/>
+    public static bool operator >(GitPath? left, GitPath? right) => left is not null && right is not null && left.CompareTo(right) > 0;
+
+    /// <inheritdoc/>
+    public static bool operator >=(GitPath? left, GitPath? right) => left is not null && right is not null && left.CompareTo(right) >= 0;
 
     /// <inheritdoc/>
     public override string ToString() => _pathString ??= string.Join('/', _pathChunks);

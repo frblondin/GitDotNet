@@ -8,7 +8,7 @@ namespace GitDotNet.Readers;
 
 internal partial class CommitGraphReader
 {
-    private class GraphFile : IDisposable
+    private sealed class GraphFile : IDisposable
     {
         public GraphFile(IFileOffsetStreamReader reader)
         {
@@ -54,6 +54,7 @@ internal partial class CommitGraphReader
         public readonly long OidLookupOffset;
         public readonly long CommitDataOffset;
         public readonly long ExtraEdgeListOffset;
+        private bool _disposedValue;
 
         private static (int HashLength, byte NumChunk) ReadCommitGraphHeader(Stream stream, byte[] fourByteBuffer)
         {
@@ -65,7 +66,6 @@ internal partial class CommitGraphReader
             }
 
             stream.ReadExactly(fourByteBuffer.AsSpan(0, 1));
-            var version = fourByteBuffer[0];
 
             stream.ReadExactly(fourByteBuffer.AsSpan(0, 1));
             var hashVersion = fourByteBuffer[0];
@@ -80,7 +80,6 @@ internal partial class CommitGraphReader
             var numChunks = fourByteBuffer[0];
 
             stream.ReadExactly(fourByteBuffer.AsSpan(0, 1));
-            var numBaseCommitGraphs = fourByteBuffer[0];
 
             return (hashLength, numChunks);
         }
@@ -169,9 +168,28 @@ internal partial class CommitGraphReader
             return commitIndex;
         }
 
+        /// <summary>
+        /// Releases the unmanaged resources used by the <see cref="GraphFile"/> and optionally releases the managed resources.
+        /// </summary>
+        /// <param name="disposing"></param>
+        private void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    Reader.Dispose();
+                }
+
+                _disposedValue = true;
+            }
+        }
+
         public void Dispose()
         {
-            Reader.Dispose();
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

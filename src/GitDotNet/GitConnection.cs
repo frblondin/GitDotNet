@@ -96,7 +96,7 @@ public partial class GitConnection : IDisposable
                 var parents = await commit.GetParentsAsync();
                 if (op == "~")
                 {
-                    commit = parents.First();
+                    commit = parents[0];
                 }
                 else if (op == "^")
                 {
@@ -125,13 +125,6 @@ public partial class GitConnection : IDisposable
     /// <returns>A list of changes between the two <see cref="TreeEntry"/> instances.</returns>
     public virtual async Task<IList<Change>> CompareAsync(TreeEntry old, TreeEntry @new) =>
         await _comparer.CompareAsync(old, @new);
-
-    /// <summary>Compares two <see cref="CommitEntry"/> instances by comparing their associated tree entries.</summary>
-    /// <param name="old">The old <see cref="CommitEntry"/> instance.</param>
-    /// <param name="new">The new <see cref="CommitEntry"/> instance.</param>
-    /// <returns></returns>
-    public virtual async Task<IList<Change>> CompareAsync(CommitEntry old, CommitEntry @new) =>
-        await CompareAsync(await old.GetRootTreeAsync(), await @new.GetRootTreeAsync());
 
     /// <summary>Compares two <see cref="CommitEntry"/> instances by comparing their associated tree entries.</summary>
     /// <param name="old">The old <see cref="CommitEntry"/> instance.</param>

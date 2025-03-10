@@ -4,7 +4,7 @@ using GitDotNet.Tools;
 namespace GitDotNet;
 
 /// <summary>Represents a Git tag entry.</summary>
-public record class TagEntry : Entry
+public sealed record class TagEntry : Entry
 {
     private readonly IObjectResolver _objectResolver;
     private readonly Lazy<Content> _content;
@@ -43,35 +43,13 @@ public record class TagEntry : Entry
         while (index < Data.Length)
         {
             var lineEndIndex = Array.IndexOf(Data, (byte)'\n', index);
-            if (lineEndIndex == -1) lineEndIndex = Data.Length;
+            if (lineEndIndex == -1)
+                lineEndIndex = Data.Length;
 
             var line = Encoding.UTF8.GetString(Data, index, lineEndIndex - index);
             index = lineEndIndex + 1;
 
-            if (line.StartsWith("object "))
-            {
-                obj = line[7..];
-            }
-            else if (line.StartsWith("type "))
-            {
-                type = line[5..];
-            }
-            else if (line.StartsWith("tag "))
-            {
-                tag = line[4..];
-            }
-            else if (line.StartsWith("tagger "))
-            {
-                tagger = line[7..];
-            }
-            else if (line.Length > 0 || message.Length > 0)
-            {
-                if (message.Length > 0)
-                {
-                    message.AppendLine();
-                }
-                message.Append(line);
-            }
+            ExtractTagInfo(ref obj, ref type, ref tag, ref tagger, message, line);
         }
 
         if (obj is null) throw new InvalidOperationException("Invalid tag entry: missing object.");
@@ -79,6 +57,34 @@ public record class TagEntry : Entry
         if (tag is null) throw new InvalidOperationException("Invalid tag entry: missing tag.");
 
         return new Content(obj, ParseEntryType(type), tag, Signature.Parse(tagger), message.ToString());
+    }
+
+    private static void ExtractTagInfo(ref string? obj, ref string? type, ref string? tag, ref string? tagger, StringBuilder message, string line)
+    {
+        if (line.StartsWith("object "))
+        {
+            obj = line[7..];
+        }
+        else if (line.StartsWith("type "))
+        {
+            type = line[5..];
+        }
+        else if (line.StartsWith("tag "))
+        {
+            tag = line[4..];
+        }
+        else if (line.StartsWith("tagger "))
+        {
+            tagger = line[7..];
+        }
+        else if (line.Length > 0 || message.Length > 0)
+        {
+            if (message.Length > 0)
+            {
+                message.AppendLine();
+            }
+            message.Append(line);
+        }
     }
 
     private static EntryType ParseEntryType(string type) => type switch

@@ -3,10 +3,12 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using GitDotNet.Tools;
 using System.Text;
+using System.Diagnostics.CodeAnalysis;
 
 namespace GitDotNet;
 
 /// <summary>Represents a Git branch.</summary>
+[ExcludeFromCodeCoverage]
 public class Remote
 {
     private readonly GitConnection _gitConnection;

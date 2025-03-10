@@ -10,7 +10,7 @@ using GitDotNet.Tools;
 namespace GitDotNet;
 
 /// <summary>Represents a Git branch.</summary>
-public class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>
+public class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>, IEquatable<Branch>
 {
     private readonly Func<Task<CommitEntry>> _tipProvider;
 
@@ -58,7 +58,7 @@ public class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>
     /// <summary>Gets the tip commit of the branch.</summary>
     public async Task<CommitEntry> GetTipAsync() => await _tipProvider();
 
-    private Remote GetRemote()
+    private Remote? GetRemote()
     {
         var name = (Connection.Info.Config
             .GetNamedSection("branch", FriendlyName, throwIfNull: false)?.TryGetValue("remote", out var remote) ?? false) ?
@@ -87,6 +87,30 @@ public class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>
 
     /// <inheritdoc/>
     public int CompareTo(Branch? other) => CanonicalName.CompareTo(other?.CanonicalName);
+
+    /// <inheritdoc/>
+    public bool Equals(Branch? other) => CanonicalName == other?.CanonicalName;
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => obj is Branch branch && Equals(branch);
+
+    /// <inheritdoc/>
+    public static bool operator ==(Branch? left, Branch? right) => Equals(left, right);
+
+    /// <inheritdoc/>
+    public static bool operator !=(Branch? left, Branch? right) => !Equals(left, right);
+
+    /// <inheritdoc/>
+    public static bool operator <(Branch? left, Branch? right) => left is not null && right is not null && left.CanonicalName.CompareTo(right.CanonicalName) < 0;
+
+    /// <inheritdoc/>
+    public static bool operator <=(Branch? left, Branch? right) => left is not null && right is not null && left.CanonicalName.CompareTo(right.CanonicalName) <= 0;
+
+    /// <inheritdoc/>
+    public static bool operator >(Branch? left, Branch? right) => left is not null && right is not null && left.CanonicalName.CompareTo(right.CanonicalName) > 0;
+
+    /// <inheritdoc/>
+    public static bool operator >=(Branch? left, Branch? right) => left is not null && right is not null && left.CanonicalName.CompareTo(right.CanonicalName) >= 0;
 
     /// <summary>Represents a collection of Git branches.</summary>
     [DebuggerDisplay("Count = {Count}")]

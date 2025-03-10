@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace GitDotNet.Indexing.LiteDb.Converters;
 
-internal class HashIdDictionaryConversion : ValueConverter<Dictionary<string, HashId>, byte[]>
+internal sealed class HashIdDictionaryConversion : ValueConverter<Dictionary<string, HashId>, byte[]>
 {
     private static JsonSerializerOptions JsonSerializerSupportingHashIdOptions { get; } = new()
     {

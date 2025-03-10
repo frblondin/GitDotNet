@@ -3,8 +3,6 @@ using System.Linq.Expressions;
 using System.Reflection;
 using GitDotNet.Indexing.LiteDb;
 using GitDotNet.Indexing.LiteDb.Data;
-using LangChain.DocumentLoaders;
-using LangChain.Extensions;
 using LangChain.Providers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -18,6 +16,7 @@ public partial class GitIndexing : IDisposable
     private readonly IOptions<Options> _options;
     private readonly IFileSystem _fileSystem;
     private readonly SqliteDatabaseContext _context;
+    private bool _disposedValue;
 
     /// <summary>Initializes a new instance of the <see cref="GitIndexing"/> class.</summary>
     /// <param name="connection">The connection to the Git repository.</param>
@@ -43,17 +42,18 @@ public partial class GitIndexing : IDisposable
     {
         var commitData = await EnsureIndexAsync(commit);
         var blobIds = commitData.Blobs.Values.ToList();
-        var filteredBlobs = _context.Set<TIndex>().AsQueryable()
+        var filteredBlobs = await _context.Set<TIndex>().AsQueryable()
             .Where(x => blobIds.Contains(x.Id))
             .Where(predicate)
-            .ToList();
+            .Select(data => data.Id)
+            .ToListAsync();
         var blobPaths = commitData.Blobs.ToLookup(x => x.Value, x => x.Key);
-        foreach (var data in filteredBlobs)
+        foreach (var id in filteredBlobs)
         {
-            var paths = blobPaths[data.Id];
+            var paths = blobPaths[id];
             foreach (var path in paths)
             {
-                yield return (path, await _connection.Objects.GetAsync<BlobEntry>(data.Id));
+                yield return (path, await _connection.Objects.GetAsync<BlobEntry>(id));
             }
         }
     }
@@ -91,7 +91,7 @@ public partial class GitIndexing : IDisposable
         var collectionValues = new Dictionary<Type, IList<BlobIndex>>();
         var blobs = await GetBlobEntriesAsync(tree).ToListAsync();
         var blobIds = blobs.Select(x => x.Blob.Id).ToHashSet();
-        var existingIndexes = _context.IndexedBlobs.Where(x => blobIds.Contains(x.Id)).Select(x => x.Id).ToHashSet();
+        var existingIndexes = await _context.IndexedBlobs.Where(x => blobIds.Contains(x.Id)).Select(x => x.Id).ToHashSetAsync();
         foreach (var (blobTreeEntry, path) in blobs)
         {
             commitBlobs.Blobs[path] = blobTreeEntry.Id;
@@ -99,15 +99,15 @@ public partial class GitIndexing : IDisposable
             {
                 continue;
             }
-            await CreateBlobIndexEntries(collectionValues, blobTreeEntry, path);
+            CreateBlobIndexEntries(collectionValues, blobTreeEntry, path);
         }
 
         return collectionValues;
     }
 
-    private async Task CreateBlobIndexEntries(Dictionary<Type, IList<BlobIndex>> collectionValues, TreeEntryItem blobTreeEntry, string path)
+    private void CreateBlobIndexEntries(Dictionary<Type, IList<BlobIndex>> collectionValues, TreeEntryItem blobTreeEntry, string path)
     {
-        var blob = await blobTreeEntry.GetEntryAsync<BlobEntry>();
+        //var blob = await blobTreeEntry.GetEntryAsync<BlobEntry>();
         //if (blob.IsText)
         //{
         //    var document = new Document(
@@ -123,7 +123,8 @@ public partial class GitIndexing : IDisposable
             .SelectMany(p => p(path, blobTreeEntry).ToEnumerable());
         foreach (var value in indexValues)
         {
-            var values = collectionValues.TryGetValue(value.GetType(), out var list) ?
+            var type = value.GetType();
+            var values = collectionValues.TryGetValue(type, out var list) ?
                 list :
                 collectionValues[value.GetType()] = [];
             values.Add(value);
@@ -153,6 +154,27 @@ public partial class GitIndexing : IDisposable
         }
     }
 
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                _context.Dispose();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
     ///// <summary>Finds similar blobs to the specified question.</summary>
     ///// <param name="question">The question to find similar blobs for.</param>
     ///// <param name="amount">The amount of similar blobs to find.</param>
@@ -170,11 +192,4 @@ public partial class GitIndexing : IDisposable
     //        }
     //    }
     //}
-
-    /// <inheritdoc/>
-    public void Dispose()
-    {
-        _context.Dispose();
-        GC.SuppressFinalize(this);
-    }
 }
