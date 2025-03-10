@@ -60,7 +60,7 @@ public class ReadRandomBlobsBenchmark
     {
         var entry = await _GitDotNetNoCacheExpiration!.Objects.GetAsync<BlobEntry>(GetRandomId());
         using var stream = entry.OpenRead();
-        stream.CopyTo(Stream.Null);
+        await stream.CopyToAsync(Stream.Null);
     }
 
     [Benchmark]
@@ -68,7 +68,7 @@ public class ReadRandomBlobsBenchmark
     {
         var entry = await _GitDotNet10MsCache!.Objects.GetAsync<BlobEntry>(GetRandomId());
         using var stream = entry.OpenRead();
-        stream.CopyTo(Stream.Null);
+        await stream.CopyToAsync(Stream.Null);
     }
 
     [Benchmark]
@@ -76,7 +76,7 @@ public class ReadRandomBlobsBenchmark
     {
         var entry = await _GitDotNet100MsCache!.Objects.GetAsync<BlobEntry>(GetRandomId());
         using var stream = entry.OpenRead();
-        stream.CopyTo(Stream.Null);
+        await stream.CopyToAsync(Stream.Null);
     }
 
     [Benchmark]

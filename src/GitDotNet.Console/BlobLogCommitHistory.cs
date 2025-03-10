@@ -13,8 +13,6 @@ public class BlobLogCommitHistory(GitConnectionProvider factory) : BackgroundSer
         var tip = connection.Head.Tip ?? throw new NotSupportedException("Branch has no tip commit.");
         TreeEntryItem? entry = null;
         var root = await tip.GetRootTreeAsync();
-        var filePath = InputData("File path in repository", path =>
-            (entry = AsyncHelper.RunSync(async () => await root.GetPathAsync(new GitPath(path)))) != null);
         var blob = await entry!.GetEntryAsync<BlobEntry>();
         await foreach (var commit in blob.GetLogAsync(
             connection.Head,

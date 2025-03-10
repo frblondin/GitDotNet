@@ -73,7 +73,7 @@ public class ArchiveBenchmark
                 var entry = archive.CreateEntry(data.Path.ToString(), CompressionLevel.Fastest);
                 using var entryStream = entry.Open();
                 await data.Stream.CopyToAsync(entryStream);
-                data.Stream.Dispose();
+                await data.Stream.DisposeAsync();
             }
         }
     }
