@@ -94,7 +94,7 @@ class Build : NukeBuild
 
     [Parameter] string SonarHostUrl { get; } = "https://sonarcloud.io";
     [Parameter] string SonarOrganization { get; } = "frblondin-github";
-    [Parameter] string SonarqubeProjectKey { get; } = "GitDotNet";
+    [Parameter] string SonarqubeProjectKey { get; } = "frblondin_GitDotNet";
     [Parameter, Secret] readonly string SonarToken;
 
     string GitHubNugetFeed => GitHubActions.Instance != null
