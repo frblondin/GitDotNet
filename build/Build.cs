@@ -130,8 +130,6 @@ class Build : NukeBuild
                     .EnableExcludeTestProjects()
                     .AddAdditionalParameter("sonar.cs.roslyn.ignoreIssues", "false")
                     .AddVisualStudioCoveragePaths(CoverageResult / "coverage.xml")
-                    .AddSourceExclusions("**/*") // Exclude all directories
-                    .AddSourceInclusions("**/GitDotNet/**/*.*") // Include only src/GitDotNet directory
                     .SetVSTestReports(TestDirectory / "*.trx");
 
                 return IsPR ?
