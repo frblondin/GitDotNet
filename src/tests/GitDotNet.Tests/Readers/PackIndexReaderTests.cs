@@ -18,10 +18,10 @@ public class PackIndexReaderTests
     {
         // Act
         var entry = await sut.GetAsync(int.Parse(Resource.BlobPosition), HashId.Empty, _ => throw new NotImplementedException());
-        var text = Encoding.UTF8.GetString(entry.Data);
+        var text = Encoding.UTF8.GetString(entry.Data).ReplaceLineEndings();
 
         // Assert
-        text.Should().Be(Resource.BlobContent);
+        text.Should().Be(Resource.BlobContent.ReplaceLineEndings());
     }
 
     [Test]
@@ -29,10 +29,10 @@ public class PackIndexReaderTests
     {
         // Act
         var entry = await sut.GetAsync(int.Parse(Resource.OfsDeltaPosition), HashId.Empty, _ => throw new NotImplementedException());
-        var text = Encoding.UTF8.GetString(entry.Data);
+        var text = Encoding.UTF8.GetString(entry.Data).ReplaceLineEndings();
 
         // Assert
-        text.Should().Be(Resource.OfsDeltaContent);
+        text.Should().Be(Resource.OfsDeltaContent.ReplaceLineEndings());
     }
 
     private PackReader sut;
