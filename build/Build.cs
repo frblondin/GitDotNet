@@ -53,6 +53,7 @@ using Project = Nuke.Common.ProjectModel.Project;
     
     InvokedTargets = [nameof(Pack)],
     ImportSecrets = ["GITHUB_TOKEN", "SONAR_TOKEN", nameof(NuGetApiKey)],
+    WritePermissions = [GitHubActionsPermissions.Packages],
     FetchDepth = 0)]
 class Build : NukeBuild
 {

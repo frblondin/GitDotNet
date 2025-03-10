@@ -27,6 +27,9 @@ on:
       - main
       - 'releases/**'
 
+permissions:
+  packages: write
+
 jobs:
   ubuntu-latest:
     name: ubuntu-latest
