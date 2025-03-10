@@ -130,6 +130,8 @@ class Build : NukeBuild
                     .EnableExcludeTestProjects()
                     .AddAdditionalParameter("sonar.cs.roslyn.ignoreIssues", "false")
                     .AddVisualStudioCoveragePaths(CoverageResult / "coverage.xml")
+                    .AddCoverageExclusions("**/*.Tests/**/*.*")
+                    .AddSourceExclusions("**/*.Tests/**/*.*, *Generated*")
                     .SetVSTestReports(TestDirectory / "*.trx");
 
                 return IsPR ?
