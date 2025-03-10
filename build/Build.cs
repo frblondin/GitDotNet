@@ -127,7 +127,7 @@ class Build : NukeBuild
                     .SetProjectKey(SonarqubeProjectKey)
                     .SetVersion(GitVersion.AssemblyVersion)
                     .EnableExcludeTestProjects()
-                    .AddAdditionalParameter("sonar.scanner.scanAll", "false")
+                    .AddAdditionalParameter("sonar.cs.roslyn.ignoreIssues", "false")
                     .AddVisualStudioCoveragePaths(CoverageResult / "coverage.xml")
                     .AddCoverageExclusions("**/*.Tests/**/*.*")
                     .AddSourceExclusions("**/*.Tests/**/*.*, *Generated*")
