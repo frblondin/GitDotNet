@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
 using System.Text;
 using GitDotNet.Tools;
+using static GitDotNet.Readers.CommitGraphReader;
 
 namespace GitDotNet.Readers;
 
@@ -16,20 +17,19 @@ internal partial class CommitGraphReader : IDisposable
     private const int OidLookupKey = 0x4F49444C;
     private const int CommitDataKey = 0x43444154;
     private const int ExtraEdgeListKey = 0x45444745;
-    private const int NoParent = 0x70000000;
+    private const int LastParent = 0x70000000;
 
     private readonly IObjectResolver _objectResolver;
     private readonly IList<GraphFile> _graphFiles;
     private bool _disposedValue;
 
-    private CommitGraphReader(IObjectResolver objectResolver,
-                              IList<GraphFile> graphFiles)
+    private CommitGraphReader(IObjectResolver objectResolver, IList<GraphFile> graphFiles)
     {
         _objectResolver = objectResolver;
         _graphFiles = graphFiles;
     }
 
-    private int HashLength => _graphFiles[0].HashLength;
+    private int HashLength => _graphFiles.Count > 0 ? _graphFiles[0].HashLength : Objects.HashLength;
 
     public static CommitGraphReader? Load(string path,
                                           IObjectResolver objectResolver,
@@ -129,9 +129,7 @@ internal partial class CommitGraphReader : IDisposable
         throw new InvalidOperationException("Graph position out of range.");
     }
 
-    private CommitEntry ParseCommitEntry(HashId commitHash,
-                                         int commitIndex,
-                                         GraphFile graph)
+    private CommitEntry ParseCommitEntry(HashId commitHash, int commitIndex, GraphFile graph)
     {
         using var stream = graph.Reader.OpenRead(graph.CommitDataOffset + commitIndex * (HashLength + 16));
 
@@ -157,27 +155,8 @@ internal partial class CommitGraphReader : IDisposable
 
         // Handle parent IDs
         var parents = ImmutableList.CreateBuilder<HashId>();
-        const uint ExtraParents = 0x80000000;
-        if (parent1Position != NoParent)
-        {
-            var parentId = GetCommitId(parent1Position);
-            parents.Add(parentId);
-        }
-
-        if (parent2Position != NoParent)
-        {
-            if ((parent2Position & ExtraParents) != 0)
-            {
-                // Handle extra parents from the Extra Edge List chunk
-                var extraParentIndex = parent2Position & 0x7FFFFFFF;
-                ReadExtraParents(parents, extraParentIndex, graph);
-            }
-            else
-            {
-                var parentId = GetCommitId(parent2Position);
-                parents.Add(parentId);
-            }
-        }
+        ReadFirstParent(parent1Position, parents);
+        ReadExtraParents(graph, parent2Position, parents);
 
         return new CommitEntry(commitHash,
                                new Lazy<byte[]>(() => _objectResolver.GetDataAsync(commitHash).ConfigureAwait(false).GetAwaiter().GetResult()),
@@ -187,15 +166,39 @@ internal partial class CommitGraphReader : IDisposable
                                DateTimeOffset.FromUnixTimeSeconds(commitTime));
     }
 
-    [ExcludeFromCodeCoverage]
-    private void ReadExtraParents(ImmutableList<HashId>.Builder parents, int extraParentIndex, GraphFile graph)
+    private void ReadFirstParent(int parent1Position, ImmutableList<HashId>.Builder parents)
     {
+        if (parent1Position != LastParent)
+        {
+            var parentId = GetCommitId(parent1Position);
+            parents.Add(parentId);
+        }
+    }
+
+    private void ReadExtraParents(GraphFile graph, int parent2Position, ImmutableList<HashId>.Builder parents)
+    {
+        if (parent2Position == LastParent) return;
+
+        if (!ReadExtraEdgeListParents(parents, parent2Position, graph))
+        {
+            var parentId = GetCommitId(parent2Position);
+            parents.Add(parentId);
+        }
+    }
+
+    private bool ReadExtraEdgeListParents(ImmutableList<HashId>.Builder parents, int parent2Position, GraphFile graph)
+    {
+        const uint ExtraParents = 0x80000000;
+
+        if ((parent2Position & ExtraParents) == 0) return false;
+
+        var extraParentIndex = parent2Position & 0x7FFFFFFF;
         if (graph.ExtraEdgeListOffset == -1)
         {
             throw new InvalidOperationException("Extra Edge List chunk not found in commit-graph file.");
         }
 
-        using var stream = graph.Reader.OpenRead(graph.CommitDataOffset + extraParentIndex * 4);
+        using var stream = graph.Reader.OpenRead(graph.ExtraEdgeListOffset + extraParentIndex * 4);
         var fourByteBuffer = ArrayPool<byte>.Shared.Rent(4);
         try
         {
@@ -203,19 +206,20 @@ internal partial class CommitGraphReader : IDisposable
             {
                 stream.ReadExactly(fourByteBuffer.AsSpan(0, 4));
                 var parentIndex = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
-                if (parentIndex == NoParent)
+                var parentId = GetCommitId(parentIndex);
+                parents.Add(parentId);
+
+                if ((parentIndex & LastParent) != 0)
                 {
                     break;
                 }
-
-                var parentId = GetCommitId(parentIndex);
-                parents.Add(parentId);
             }
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(fourByteBuffer);
         }
+        return true;
     }
 
     protected virtual void Dispose(bool disposing)

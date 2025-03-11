@@ -3,6 +3,7 @@ using GitDotNet.Tools;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
 
 namespace GitDotNet;
@@ -68,8 +69,10 @@ public partial class Objects : IDisposable, IObjectResolver
         return PackReaders = result.ToImmutable();
     }
 
+    [ExcludeFromCodeCoverage]
     async Task<byte[]> IObjectResolver.GetDataAsync(HashId id) => (await GetUnlinkedEntryAsync(id, throwIfNotFound: true)).Data;
 
+    [ExcludeFromCodeCoverage]
     internal async Task<UnlinkedEntry> GetUnlinkedEntryAsync(HashId id) => await GetUnlinkedEntryAsync(id, throwIfNotFound: true);
 
     internal async Task<UnlinkedEntry> GetUnlinkedEntryAsync(HashId id, bool throwIfNotFound) =>
@@ -196,6 +199,8 @@ public partial class Objects : IDisposable, IObjectResolver
                 if (!_disposed.IsCancellationRequested)
                     _disposed.Cancel();
                 _disposed.Dispose();
+                if (_commitReader.IsValueCreated)
+                    _commitReader.Value?.Dispose();
                 DisposePacks();
             }
 

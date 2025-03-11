@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Buffers.Binary;
-using System.Runtime.InteropServices;
 using System.Text;
 using GitDotNet.Tools;
 
@@ -24,11 +23,16 @@ internal partial class CommitGraphReader
                 // Locate the commit entry in the commit-graph file
                 if (!chunkOffsets.TryGetValue(OidFanoutKey, out OidFanoutOffset) ||
                     !chunkOffsets.TryGetValue(OidLookupKey, out OidLookupOffset) ||
-                    !chunkOffsets.TryGetValue(CommitDataKey, out CommitDataOffset))
+                    !chunkOffsets.TryGetValue(CommitDataKey, out var commitDataOffset))
                 {
                     throw new InvalidDataException("Invalid commit-graph file format.");
                 }
-                if (!chunkOffsets.TryGetValue(ExtraEdgeListKey, out ExtraEdgeListOffset))
+                CommitDataOffset = commitDataOffset;
+                if (chunkOffsets.TryGetValue(ExtraEdgeListKey, out var extraEdgeListOffset))
+                {
+                    ExtraEdgeListOffset = extraEdgeListOffset;
+                }
+                else
                 {
                     ExtraEdgeListOffset = -1L;
                 }
@@ -52,8 +56,8 @@ internal partial class CommitGraphReader
 
         public readonly long OidFanoutOffset;
         public readonly long OidLookupOffset;
-        public readonly long CommitDataOffset;
-        public readonly long ExtraEdgeListOffset;
+        public long CommitDataOffset { get; }
+        public long ExtraEdgeListOffset { get; }
         private bool _disposedValue;
 
         private static (int HashLength, byte NumChunk) ReadCommitGraphHeader(Stream stream, byte[] fourByteBuffer)

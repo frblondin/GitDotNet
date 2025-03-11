@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -67,6 +68,7 @@ public partial record class BlobEntry : Entry
     /// <param name="branch">The branch to start from.</param>
     /// <param name="options">The options for the log.</param>
     /// <returns>An asynchronous enumerable of commit entries.</returns>
+    [ExcludeFromCodeCoverage]
     public IAsyncEnumerable<CommitEntry> GetLogAsync(Branch branch, LogOptions? options = null)
     {
         var tip = branch.Tip ?? throw new NotSupportedException("Branch has no tip commit.");

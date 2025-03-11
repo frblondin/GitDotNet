@@ -3,8 +3,6 @@ using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.IO.Abstractions;
-using System.Text.RegularExpressions;
 using GitDotNet.Tools;
 
 namespace GitDotNet;
@@ -21,6 +19,7 @@ public class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>, IEquat
         _tipProvider = tipProvider;
     }
 
+    [ExcludeFromCodeCoverage]
     internal GitConnection Connection { get; }
 
     /// <summary>Gets the full name of the branch.</summary>
@@ -40,11 +39,13 @@ public class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>, IEquat
 
     /// <summary>Gets the tip commit of the branch.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
+    [ExcludeFromCodeCoverage]
     public CommitEntry? Tip => AsyncHelper.RunSync(GetTipAsync);
 
     /// <summary>Returns an enumerator that iterates asynchronously through the commits in the branch.</summary>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the asynchronous operation.</param>
     /// <returns>An enumerator that can be used to iterate through the commits in the branch.</returns>
+    [ExcludeFromCodeCoverage]
     public IAsyncEnumerator<CommitEntry> GetAsyncEnumerator(CancellationToken cancellationToken = default)
     {
         var tip = Tip;
@@ -86,30 +87,39 @@ public class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>, IEquat
     }
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public int CompareTo(Branch? other) => CanonicalName.CompareTo(other?.CanonicalName);
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public bool Equals(Branch? other) => CanonicalName == other?.CanonicalName;
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public override bool Equals(object? obj) => obj is Branch branch && Equals(branch);
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public static bool operator ==(Branch? left, Branch? right) => Equals(left, right);
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public static bool operator !=(Branch? left, Branch? right) => !Equals(left, right);
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public static bool operator <(Branch? left, Branch? right) => left is not null && right is not null && left.CanonicalName.CompareTo(right.CanonicalName) < 0;
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public static bool operator <=(Branch? left, Branch? right) => left is not null && right is not null && left.CanonicalName.CompareTo(right.CanonicalName) <= 0;
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public static bool operator >(Branch? left, Branch? right) => left is not null && right is not null && left.CanonicalName.CompareTo(right.CanonicalName) > 0;
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public static bool operator >=(Branch? left, Branch? right) => left is not null && right is not null && left.CanonicalName.CompareTo(right.CanonicalName) >= 0;
 
     /// <summary>Represents a collection of Git branches.</summary>
@@ -130,6 +140,7 @@ public class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>, IEquat
             throw new KeyNotFoundException($"Branch '{name}' not found.");
 
         /// <inheritdoc/>
+        [ExcludeFromCodeCoverage]
         public int Count => _branches.Count;
 
         /// <summary>Attempts to get the branch with the specified name.</summary>

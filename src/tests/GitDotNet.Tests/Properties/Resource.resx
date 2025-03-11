@@ -221,4 +221,10 @@
   <data name="Index" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>index;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
+  <data name="MergeCommitGraph" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>merge-commit-graph;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
+  <data name="MultiParentMergeCommitGraph" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>multi-parent-merge-commit-graph;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
 </root>

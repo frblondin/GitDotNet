@@ -251,26 +251,6 @@ internal partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnif
         return [.. result];
     }
 
-    private sealed class CharMemoryEqualityComparer : IEqualityComparer<ReadOnlyMemory<char>>
-    {
-        public static CharMemoryEqualityComparer Instance { get; } = new();
-
-        private CharMemoryEqualityComparer() { }
-
-        public bool Equals(ReadOnlyMemory<char> x, ReadOnlyMemory<char> y) => x.Span.SequenceEqual(y.Span);
-
-        public int GetHashCode(ReadOnlyMemory<char> mem)
-        {
-            var span = mem.Span;
-            int result = 0;
-            for (int i = 0; i < span.Length; i++)
-            {
-                result = HashCode.Combine(result, span[i]);
-            }
-            return result;
-        }
-    }
-
     [GeneratedRegex(@"^\s*")]
     private static partial Regex LeadingWhitespaceRegex();
 }
