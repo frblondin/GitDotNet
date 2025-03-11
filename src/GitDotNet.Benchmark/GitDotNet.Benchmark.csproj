@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BenchmarkDotNet" />
+        <PackageReference Include="BenchmarkDotNet.Diagnostics.Windows" />
+        <PackageReference Include="LibGit2Sharp" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" />
+        <PackageReference Include="System.Text.Json" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="BenchmarkDotNet.Running" />
+        <Using Include="GitDotNet" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\GitDotNet.Microsoft.Extensions.DependencyInjection\GitDotNet.Microsoft.Extensions.DependencyInjection.csproj" />
+    </ItemGroup>
+
+</Project>
