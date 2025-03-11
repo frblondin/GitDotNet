@@ -17,7 +17,7 @@ internal partial class CommitGraphReader : IDisposable
     private const int OidLookupKey = 0x4F49444C;
     private const int CommitDataKey = 0x43444154;
     private const int ExtraEdgeListKey = 0x45444745;
-    private const int LastParent = 0x70000000;
+    private const int NoParent = 0x70000000;
 
     private readonly IObjectResolver _objectResolver;
     private readonly IList<GraphFile> _graphFiles;
@@ -168,7 +168,7 @@ internal partial class CommitGraphReader : IDisposable
 
     private void ReadFirstParent(int parent1Position, ImmutableList<HashId>.Builder parents)
     {
-        if (parent1Position != LastParent)
+        if (parent1Position != NoParent)
         {
             var parentId = GetCommitId(parent1Position);
             parents.Add(parentId);
@@ -177,7 +177,7 @@ internal partial class CommitGraphReader : IDisposable
 
     private void ReadExtraParents(GraphFile graph, int parent2Position, ImmutableList<HashId>.Builder parents)
     {
-        if (parent2Position == LastParent) return;
+        if (parent2Position == NoParent) return;
 
         if (!ReadExtraEdgeListParents(parents, parent2Position, graph))
         {
@@ -209,7 +209,7 @@ internal partial class CommitGraphReader : IDisposable
                 var parentId = GetCommitId(parentIndex);
                 parents.Add(parentId);
 
-                if ((parentIndex & LastParent) != 0)
+                if ((parentIndex & ExtraParents) != 0)
                 {
                     break;
                 }
