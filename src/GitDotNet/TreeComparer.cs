@@ -41,9 +41,8 @@ internal class TreeComparer(IOptions<GitConnection.Options> options) : ITreeComp
         {
             var oldItem = c.SingleOrDefault(x => !x.IsNew).Blob;
             var newItem = c.SingleOrDefault(x => x.IsNew).Blob;
-            var changeType = oldItem is not null && newItem is not null ?
-                ChangeType.Modified :
-                oldItem is not null ? ChangeType.Removed : ChangeType.Added;
+            var changeType = ClassifyChangeType(oldItem, newItem);
+
             var change = new Change(changeType,
                                     oldItem != null ? c.Key : null,
                                     newItem != null ? c.Key : null,
@@ -56,6 +55,18 @@ internal class TreeComparer(IOptions<GitConnection.Options> options) : ITreeComp
                                                                         IEnumerable<BlobEntryPath> second,
                                                                         bool isNew) =>
             first.ExceptBy(second.Select(x => x.Blob.Id), x => x.Blob.Id).Select(x => (IsNew: isNew, ItemPath: x));
+    }
+
+    private static ChangeType ClassifyChangeType(TreeEntryItem? oldItem, TreeEntryItem? newItem)
+    {
+        if (oldItem is null || newItem is null)
+        {
+            return oldItem is not null ? ChangeType.Removed : ChangeType.Added;
+        }
+        else
+        {
+            return ChangeType.Modified;
+        }
     }
 
     private static void FindRenamedBlobsWithSameId(List<Change> result, IEnumerable<BlobEntryPath>? oldBlobs, IEnumerable<BlobEntryPath>? newBlobs)

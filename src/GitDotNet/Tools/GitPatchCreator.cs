@@ -102,7 +102,7 @@ internal partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnif
         }
         else
         {
-            writer.WriteLine("Binary files differ");
+            await writer.WriteLineAsync("Binary files differ");
         }
     }
 
@@ -117,7 +117,7 @@ internal partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnif
 
     private static async Task WritePathAsync(StreamWriter writer, string prefix, GitPath? path)
     {
-        writer.Write(prefix);
+        await writer.WriteAsync(prefix);
         if (path is null)
         {
             await writer.WriteLineAsync("dev/null");

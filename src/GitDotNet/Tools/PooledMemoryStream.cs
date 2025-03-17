@@ -109,6 +109,18 @@ public class PooledMemoryStream(int initialCapacity = 4096) : Stream
             _length = _position;
     }
 
+    /// <inheritdoc />
+    public override void Write(byte[] buffer, int offset, int count)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, nameof(PooledMemoryStream));
+
+        EnsureCapacity(_position + count);
+        Array.Copy(buffer, offset, _buffer, _position, count);
+        _position += count;
+        if (_position > _length)
+            _length = _position;
+    }
+
     /// <summary>Asynchronously writes data from the specified stream into the current stream.</summary>
     /// <param name="stream">The stream to read data from.</param>
     /// <param name="count">The number of bytes to write.</param>
@@ -126,18 +138,6 @@ public class PooledMemoryStream(int initialCapacity = 4096) : Stream
             remaining -= read;
             _position += read;
         }
-        if (_position > _length)
-            _length = _position;
-    }
-
-    /// <inheritdoc />
-    public override void Write(byte[] buffer, int offset, int count)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, nameof(PooledMemoryStream));
-
-        EnsureCapacity(_position + count);
-        Array.Copy(buffer, offset, _buffer, _position, count);
-        _position += count;
         if (_position > _length)
             _length = _position;
     }
