@@ -84,7 +84,7 @@ internal class LooseReader(string path, IFileSystem fileSystem)
         string objectPath;
         var folder = fileSystem.Path.Combine(path, GetObjectFolder(hexString));
         var fileName = GetFileName(hexString);
-        if (hexString.Length < NominalHexStringLength)
+        if (fileSystem.Path.Exists(folder) && hexString.Length < NominalHexStringLength)
         {
             var files = fileSystem.Directory.GetFiles(folder, $"{fileName}*");
             if (files.Length > 1)

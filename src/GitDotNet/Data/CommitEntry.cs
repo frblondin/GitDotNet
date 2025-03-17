@@ -38,6 +38,7 @@ public record class CommitEntry : Entry
     }
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     protected internal override byte[] Data => _data.Value;
 
@@ -53,10 +54,12 @@ public record class CommitEntry : Entry
     public string Message => _content.Value.Message;
 
     /// <summary>Gets the tree entry associated with the commit.</summary>
+    [ExcludeFromCodeCoverage]
     [EditorBrowsable(EditorBrowsableState.Never)]
     public TreeEntry? RootTree => AsyncHelper.RunSync(GetRootTreeAsync);
 
     /// <summary>Gets the parent commits of the current commit.</summary>
+    [ExcludeFromCodeCoverage]
     [EditorBrowsable(EditorBrowsableState.Never)]
     public IList<CommitEntry> Parents
     {
@@ -128,10 +131,7 @@ public record class CommitEntry : Entry
 
             if (headerCompleted)
             {
-                if (message.Length > 0)
-                {
-                    message.AppendLine();
-                }
+                if (message.Length > 0) message.AppendLine();
                 message.Append(line);
             }
         }

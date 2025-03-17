@@ -13,9 +13,9 @@ public class RepositoryInfo
     private readonly Lazy<ConfigReader> _config;
     private readonly IFileSystem _fileSystem;
 
-    internal RepositoryInfo(string path, ConfigReaderFactory configReaderFactory, IFileSystem fileSystem)
+    internal RepositoryInfo(string path, ConfigReaderFactory configReaderFactory, IFileSystem fileSystem, GitCliCommand cliCommand)
     {
-        _path = new Lazy<string>(() => GitCliCommand.GetAbsoluteGitPath(path) ?? throw new InvalidOperationException("Not a git repository."));
+        _path = new Lazy<string>(() => cliCommand.GetAbsoluteGitPath(path) ?? throw new InvalidOperationException("Not a git repository."));
         _config = new(() => configReaderFactory(fileSystem.Path.Combine(Path, "config")));
         _fileSystem = fileSystem;
     }

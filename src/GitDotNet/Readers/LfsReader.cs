@@ -4,24 +4,31 @@ namespace GitDotNet.Readers;
 
 internal delegate LfsReader LfsReaderFactory(string path);
 
-internal partial class LfsReader(string path, IFileSystem fileSystem) : LooseReader(path, fileSystem)
+internal partial class LfsReader : LooseReader
 {
+    private readonly IFileSystem _fileSystem;
+
+    public LfsReader(string path, IFileSystem fileSystem) : base(path, fileSystem)
+    {
+        _fileSystem = fileSystem;
+    }
+
     protected override int NominalHexStringLength => 64;
 
     protected override string GetObjectFolder(string hexString) =>
-        fileSystem.Path.Combine(hexString[..2], hexString[2..4]);
+        _fileSystem.Path.Combine(hexString[..2], hexString[2..4]);
 
     protected override string GetFileName(string hexString) => hexString;
 
     public override (EntryType Type, Func<Stream>? DataProvider, long Length) TryLoad(string hexString)
     {
-        var objectPath = GetObjectPath(fileSystem, hexString);
-        if (!fileSystem.File.Exists(objectPath))
+        var objectPath = GetObjectPath(_fileSystem, hexString);
+        if (!_fileSystem.File.Exists(objectPath))
         {
             return (default, default, -1);
         }
 
-        return (EntryType.Blob, () => fileSystem.File.OpenReadAsynchronous(objectPath), -1);
+        return (EntryType.Blob, () => _fileSystem.File.OpenReadAsynchronous(objectPath), -1);
     }
 
     public Stream Load(string sha256)

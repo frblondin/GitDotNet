@@ -3,12 +3,12 @@ using System.Diagnostics;
 namespace GitDotNet.Tools;
 
 /// <summary>Provides a set of methods to interact with the Git CLI.</summary>
-public static class GitCliCommand
+public class GitCliCommand
 {
     private static readonly Lazy<bool> _isGitInstalled = new(
         () => ExecuteNoCheck(Environment.CurrentDirectory, "--version", throwOnError: false) == 0);
 
-    internal static string? GetAbsoluteGitPath(string path) =>
+    internal virtual string? GetAbsoluteGitPath(string path) =>
         ExecuteNoCheck(path, "rev-parse --absolute-git-dir", throwOnError: false, outputDataReceived: (_, e) =>
         {
             if (e.Data is not null)

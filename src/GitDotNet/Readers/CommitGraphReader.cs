@@ -29,7 +29,7 @@ internal partial class CommitGraphReader : IDisposable
         _graphFiles = graphFiles;
     }
 
-    private int HashLength => _graphFiles.Count > 0 ? _graphFiles[0].HashLength : Objects.HashLength;
+    private int HashLength => _graphFiles.Count > 0 ? _graphFiles[0].HashLength : ObjectResolver.HashLength;
 
     public static CommitGraphReader? Load(string path,
                                           IObjectResolver objectResolver,
@@ -114,6 +114,7 @@ internal partial class CommitGraphReader : IDisposable
         return result;
     }
 
+    [ExcludeFromCodeCoverage]
     private GraphFile FindGraphFile(int graphPosition, out int lexPosition)
     {
         int cumulativeCount = 0;
@@ -159,11 +160,13 @@ internal partial class CommitGraphReader : IDisposable
         ReadExtraParents(graph, parent2Position, parents);
 
         return new CommitEntry(commitHash,
-                               new Lazy<byte[]>(() => _objectResolver.GetDataAsync(commitHash).ConfigureAwait(false).GetAwaiter().GetResult()),
+                               new Lazy<byte[]>(() => AsyncHelper.RunSync(GetDataAsync)),
                                _objectResolver,
                                treeId,
                                parents.ToImmutable(),
                                DateTimeOffset.FromUnixTimeSeconds(commitTime));
+
+        Task<byte[]> GetDataAsync() => ((IObjectResolverInternal)_objectResolver).GetDataAsync(commitHash);
     }
 
     private void ReadFirstParent(int parent1Position, ImmutableList<HashId>.Builder parents)

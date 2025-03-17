@@ -35,17 +35,18 @@ internal class RepositoryLocker(string path, IFileSystem fileSystem) : IReposito
 
     internal class Disposable(Action Action) : IDisposable
     {
-        internal static IDisposable Empty = new Disposable(() => { });
+        internal static IDisposable Empty { get; } = new Disposable(() => { });
 
         private readonly Action _dispose = Action ?? throw new ArgumentNullException(nameof(Action));
         private bool _disposed;
 
         public void Dispose()
         {
-            if (_disposed)
-                return;
-            _disposed = true;
-            _dispose();
+            if (!_disposed)
+            {
+                _disposed = true;
+                _dispose();
+            }
         }
     }
 }

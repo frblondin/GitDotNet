@@ -1,11 +1,10 @@
 using FluentAssertions.Execution;
 using FluentAssertions;
 using System.IO.Abstractions.TestingHelpers;
-using GitDotNet.Tools;
 using GitDotNet.Readers;
 using GitDotNet.Tests.Properties;
 using GitDotNet.Tests.Helpers;
-using FakeItEasy;
+using static GitDotNet.Tests.Helpers.Fakes;
 
 namespace GitDotNet.Tests.Readers;
 
@@ -15,8 +14,9 @@ public class IndexReaderTests
     public async Task Load()
     {
         // Arrange
-        var reader = IndexReader.Load(fileSystem.CreateOffsetReader(".git/index"), A.Fake<IObjectResolver>());
-        using var sut = new Index(".git", A.Fake<IObjectResolver>(), (_, _) => reader, fileSystem);
+        var resolver = CreateObjectResolver(hash => new BlobEntry(hash, [], _ => throw new NotImplementedException()));
+        var reader = IndexReader.Load(fileSystem.CreateOffsetReader(".git/index"), resolver);
+        using var sut = new Index(".git", resolver, (_, _) => reader, fileSystem);
 
         // Act
         var entries = await sut.GetEntriesAsync();
@@ -32,6 +32,8 @@ public class IndexReaderTests
             entries[0].UnixPermissions.Should().Be(420);
             entries[0].Path.Should().Be(".editorconfig");
             entries[0].FileSize.Should().Be(7823);
+            var entry = await entries[0].GetEntryAsync();
+            entry.Id.ToString().Should().Be("cbfaa61957324a6c5714d86008aac650adf19d24");
         }
     }
 

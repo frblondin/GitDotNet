@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace GitDotNet;
@@ -49,6 +50,7 @@ public record class Signature(string Name, string Email, DateTimeOffset Timestam
     }
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public override string ToString()
     {
         var result = new StringBuilder();

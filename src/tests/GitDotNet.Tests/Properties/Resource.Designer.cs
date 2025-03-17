@@ -128,6 +128,16 @@ namespace GitDotNet.Tests.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Byte[].
         /// </summary>
+        internal static byte[] CompleteRepositoryWithRename {
+            get {
+                object obj = ResourceManager.GetObject("CompleteRepositoryWithRename", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized resource of type System.Byte[].
+        /// </summary>
         internal static byte[] Index {
             get {
                 object obj = ResourceManager.GetObject("Index", resourceCulture);

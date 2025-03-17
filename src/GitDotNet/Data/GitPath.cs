@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace GitDotNet;
 
 /// <summary>Represents a Git path composed of multiple path chunks.</summary>
@@ -72,21 +74,27 @@ public sealed class GitPath : IEquatable<GitPath>, IComparable<GitPath>
     }
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public static bool operator ==(GitPath? left, GitPath? right) => Equals(left, right);
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public static bool operator !=(GitPath? left, GitPath? right) => !Equals(left, right);
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public static bool operator <(GitPath? left, GitPath? right) => left is not null && right is not null && left.CompareTo(right) < 0;
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public static bool operator <=(GitPath? left, GitPath? right) => left is not null && right is not null && left.CompareTo(right) <= 0;
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public static bool operator >(GitPath? left, GitPath? right) => left is not null && right is not null && left.CompareTo(right) > 0;
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public static bool operator >=(GitPath? left, GitPath? right) => left is not null && right is not null && left.CompareTo(right) >= 0;
 
     /// <inheritdoc/>

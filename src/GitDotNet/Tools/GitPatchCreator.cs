@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using spkl.Diffs;
@@ -40,7 +38,7 @@ internal partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnif
         writer.WriteLine();
     }
 
-    private static void GetDiffStat(StreamWriter writer, IList<Change> changes)
+    internal static void GetDiffStat(StreamWriter writer, IList<Change> changes)
     {
         writer.Write(' ');
         var modifications = changes.Count(c => c.Type == ChangeType.Modified || c.Type == ChangeType.Renamed);

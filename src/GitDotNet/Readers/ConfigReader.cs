@@ -22,7 +22,7 @@ public class ConfigReader
     /// <summary>Gets the path to the Git configuration file.</summary>
     public string Path { get; }
 
-    private ImmutableDictionary<string, IImmutableDictionary<string, string>> LoadConfig()
+    protected virtual ImmutableDictionary<string, IImmutableDictionary<string, string>> LoadConfig()
     {
         if (!_fileSystem.File.Exists(Path))
         {
@@ -104,7 +104,7 @@ public class ConfigReader
     /// <summary>Internal variable identifying the repository format and layout version. See
     /// <see href="https://git-scm.com/docs/gitrepository-layout"/>.</summary>
     [ExcludeFromCodeCoverage]
-    public string? RepositoryFormatVersion => GetProperty("core", "repositoryformatversion");
+    public virtual string? RepositoryFormatVersion => GetProperty("core", "repositoryformatversion");
 
     /// <summary>
     /// If true this repository is assumed to be bare and has no working directory associated with it.
@@ -117,7 +117,7 @@ public class ConfigReader
     /// repository that ends in "/.git" is assumed to be not bare (bare = false), while all other repositories are assumed to be bare(bare = true).
     /// </remarks>
     [ExcludeFromCodeCoverage]
-    public bool IsBare => GetProperty("core", "bare")?.Equals("true") ?? false;
+    public virtual bool IsBare => GetProperty("core", "bare")?.Equals("true") ?? false;
 
     /// <summary>
     /// Internal variable which enables various workarounds to enable Git to work better on filesystems that are
@@ -130,15 +130,15 @@ public class ConfigReader
     /// Git relies on the proper configuration of this variable for your operating and file system.Modifying this value may result in unexpected behavior.
     /// </remarks>
     [ExcludeFromCodeCoverage]
-    public bool IgnoreCase => GetProperty("core", "ignorecase")?.Equals("true") ?? false;
+    public virtual bool IgnoreCase => GetProperty("core", "ignorecase")?.Equals("true") ?? false;
 
     /// <summary>Gets the user name from the user section.</summary>
     [ExcludeFromCodeCoverage]
-    public string UserName => GetProperty("user", "name")!;
+    public virtual string UserName => GetProperty("user", "name")!;
 
     /// <summary>Gets the user email from the user section.</summary>
     [ExcludeFromCodeCoverage]
-    public string UserEmail => GetProperty("user", "email")!;
+    public virtual string UserEmail => GetProperty("user", "email")!;
     /// <summary>
     /// Setting this variable to "true" is the same as setting the text attribute to "auto" on all files and core.eol to "crlf".
     /// Set to true if you want to have CRLF line endings in your working directory and the repository has LF line endings.
@@ -148,7 +148,7 @@ public class ConfigReader
     /// See <see href="https://git-scm.com/docs/git-config#Documentation/git-config.txt-coreautocrlf"/>.
     /// </remarks>
     [ExcludeFromCodeCoverage]
-    public string? UseAutoCrlf => GetProperty("core", "autocrlf", throwIfNull: false);
+    public virtual string? UseAutoCrlf => GetProperty("core", "autocrlf", throwIfNull: false);
 
     /// <summary>
     /// If true, then git will read the commit-graph file (if it exists) to parse the graph structure of commits.
@@ -158,7 +158,7 @@ public class ConfigReader
     /// See <see href="https://git-scm.com/docs/git-commit-graph"/>.
     /// </remarks>
     [ExcludeFromCodeCoverage]
-    public bool UseCommitGraph => GetProperty("core", "commitGraph", throwIfNull: false)?.Equals("true") ?? true;
+    public virtual bool UseCommitGraph => GetProperty("core", "commitGraph", throwIfNull: false)?.Equals("true") ?? true;
 
     /// <summary>Gets all properties of a specified section.</summary>
     /// <param name="section">The section name.</param>

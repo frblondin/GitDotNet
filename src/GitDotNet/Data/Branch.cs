@@ -69,6 +69,7 @@ public class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>, IEquat
     }
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public override string ToString() => CanonicalName;
 
     private static string Shorten(string canonicalName)

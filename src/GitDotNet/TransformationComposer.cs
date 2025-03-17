@@ -31,7 +31,7 @@ internal class TransformationComposer(string repositoryPath, FastInsertWriterFac
         return this;
     }
 
-    public async Task<string> CommitAsync(string branch, CommitEntry commit, bool updateBranch)
+    public async Task<HashId> CommitAsync(string branch, CommitEntry commit, bool updateBranch)
     {
         CheckFullReferenceName(branch);
 
@@ -52,7 +52,7 @@ internal class TransformationComposer(string repositoryPath, FastInsertWriterFac
                 await RevertToPreviousCommitAsync(repositoryPath, branch, commit);
             }
 
-            return result;
+            return new HashId(result);
         }
         finally
         {
@@ -97,7 +97,7 @@ internal class TransformationComposer(string repositoryPath, FastInsertWriterFac
 
 internal interface ITransformationComposerInternal : ITransformationComposer
 {
-    Task<string> CommitAsync(string branch, CommitEntry commit, bool updateBranch);
+    Task<HashId> CommitAsync(string branch, CommitEntry commit, bool updateBranch);
 }
 
 /// <summary>Provides methods to compose transformations on a Git repository.</summary>

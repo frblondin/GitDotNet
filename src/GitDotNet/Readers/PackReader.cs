@@ -1,6 +1,7 @@
 using GitDotNet.Tools;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 
 namespace GitDotNet.Readers;
@@ -109,6 +110,7 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, IOptions<G
         return new(baseObject.Type, id, data);
     }
 
+    [ExcludeFromCodeCoverage]
     private static async Task<UnlinkedEntry> ReconstructRefDeltaAsync(Stream stream, Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider)
     {
         var hash = new byte[20];

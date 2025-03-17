@@ -27,7 +27,7 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
 
     private int Crc32ValuesOffset => Version switch
     {
-        2 => SortedObjectNamesOffset + Count * Objects.HashLength,
+        2 => SortedObjectNamesOffset + Count * ObjectResolver.HashLength,
         _ => throw new NotSupportedException($"Version {Version} is not supported.")
     };
 
@@ -37,9 +37,10 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         _ => throw new NotSupportedException($"Version {Version} is not supported.")
     };
 
+    [ExcludeFromCodeCoverage]
     private int LargePackFilePositionOffset => Version switch
     {
-        2 => PackFilePositionOffset + Count * (Objects.HashLength + 4),
+        2 => PackFilePositionOffset + Count * (ObjectResolver.HashLength + 4),
         _ => throw new NotSupportedException($"Version {Version} is not supported.")
     };
 
@@ -63,10 +64,10 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
             }
 
             // Read last 20-byte of stream to get the last hash
-            stream.Seek(-2 * Objects.HashLength, SeekOrigin.End);
-            var packChecksum = new byte[Objects.HashLength];
+            stream.Seek(-2 * ObjectResolver.HashLength, SeekOrigin.End);
+            var packChecksum = new byte[ObjectResolver.HashLength];
             await stream.ReadExactlyAsync(packChecksum);
-            var checksum = new byte[Objects.HashLength];
+            var checksum = new byte[ObjectResolver.HashLength];
             await stream.ReadExactlyAsync(packChecksum);
 
             return new PackIndexReader(path, version, fanout, packChecksum, checksum, fileSystem);
@@ -95,27 +96,47 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
     {
         using var stream = new MemoryStream(_data, writable: false);
         stream.Seek(SortedObjectNamesOffset + index * 20, SeekOrigin.Begin);
-        var hash = new byte[Objects.HashLength];
-        await stream.ReadExactlyAsync(hash.AsMemory(0, Objects.HashLength));
+        var hash = new byte[ObjectResolver.HashLength];
+        await stream.ReadExactlyAsync(hash.AsMemory(0, ObjectResolver.HashLength));
         return hash;
     }
 
     public async Task<int> GetIndexOfAsync(HashId id)
     {
         using var stream = new MemoryStream(_data, writable: false);
-        var hashBuffer = new byte[Objects.HashLength];
+        var hashBuffer = new byte[ObjectResolver.HashLength];
         var fanoutPosition = id.Hash[0];
         var end = _fanout[fanoutPosition];
         var start = fanoutPosition > 0 ? _fanout[fanoutPosition - 1] : 0;
 
         stream.Seek(SortedObjectNamesOffset + start * 20, SeekOrigin.Begin);
 
+        (end, start, var result) = await FindHashIndexAsync(id, stream, hashBuffer, end, start);
+        if (result != -1 && id.Hash.Count < ObjectResolver.HashLength)
+        {
+            await CheckForAmbiguousHash(start, end, result, hashBuffer);
+        }
+        return result;
+
+        async Task CheckForAmbiguousHash(int start, int end, int alreadyFound, byte[] hashBuffer)
+        {
+            stream.Seek(SortedObjectNamesOffset + start * 20, SeekOrigin.Begin);
+            for (var i = start; i < end; i++)
+            {
+                await stream.ReadExactlyAsync(hashBuffer);
+                CheckForHashCollision(id, alreadyFound, hashBuffer, i);
+            }
+        }
+    }
+
+    private async Task<(int end, int start, int result)> FindHashIndexAsync(HashId id, MemoryStream stream, byte[] hashBuffer, int end, int start)
+    {
         var result = -1;
         while (start < end)
         {
             var mid = (start + end) / 2;
             stream.Seek(SortedObjectNamesOffset + mid * 20, SeekOrigin.Begin);
-            await stream.ReadAsync(hashBuffer.AsMemory(0, Objects.HashLength));
+            await stream.ReadAsync(hashBuffer.AsMemory(0, ObjectResolver.HashLength));
 
             var comparison = id.CompareTo(hashBuffer.AsSpan(0, id.Hash.Count));
             if (comparison == 0)
@@ -132,23 +153,16 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
                 start = mid + 1;
             }
         }
-        if (result != -1 && id.Hash.Count < Objects.HashLength)
-        {
-            await CheckForAmbiguousHash(start, end, result, hashBuffer);
-        }
-        return result;
 
-        async Task CheckForAmbiguousHash(int start, int end, int alreadyFound, byte[] hashBuffer)
+        return (end, start, result);
+    }
+
+    [ExcludeFromCodeCoverage]
+    private static void CheckForHashCollision(HashId id, int alreadyFound, byte[] hashBuffer, int i)
+    {
+        if (id.CompareTo(hashBuffer.AsSpan(0, id.Hash.Count)) == 0 && i != alreadyFound)
         {
-            stream.Seek(SortedObjectNamesOffset + start * 20, SeekOrigin.Begin);
-            for (var i = start; i < end; i++)
-            {
-                await stream.ReadExactlyAsync(hashBuffer);
-                if (id.CompareTo(hashBuffer.AsSpan(0, id.Hash.Count)) == 0 && i != alreadyFound)
-                {
-                    throw new AmbiguousHashException();
-                }
-            }
+            throw new AmbiguousHashException();
         }
     }
 
@@ -156,18 +170,13 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
     {
         using var stream = new MemoryStream(_data, writable: false);
         var offset = ArrayPool<byte>.Shared.Rent(4);
-        var hashBuffer = ArrayPool<byte>.Shared.Rent(Objects.HashLength);
+        var hashBuffer = ArrayPool<byte>.Shared.Rent(ObjectResolver.HashLength);
         try
         {
             stream.Seek(PackFilePositionOffset + index * 4, SeekOrigin.Begin);
             await stream.ReadAsync(offset.AsMemory(0, 4));
             var result = (long)BinaryPrimitives.ReadInt32BigEndian(offset.AsSpan(0, 4));
-            if (result > 0x80000000)
-            {
-                stream.Seek(LargePackFilePositionOffset + index * 8, SeekOrigin.Begin);
-                await stream.ReadAsync(offset.AsMemory(0, 8));
-                result = BinaryPrimitives.ReadInt32BigEndian(offset.AsSpan(0, 4));
-            }
+            result = await CalculateLargePackFileOffset(index, stream, offset, result);
             return result;
         }
         finally
@@ -175,6 +184,19 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
             ArrayPool<byte>.Shared.Return(hashBuffer);
             ArrayPool<byte>.Shared.Return(offset);
         }
+    }
+
+    [ExcludeFromCodeCoverage]
+    private async Task<long> CalculateLargePackFileOffset(int index, MemoryStream stream, byte[] offset, long result)
+    {
+        if (result > 0x80000000)
+        {
+            stream.Seek(LargePackFilePositionOffset + index * 8, SeekOrigin.Begin);
+            await stream.ReadAsync(offset.AsMemory(0, 8));
+            result = BinaryPrimitives.ReadInt32BigEndian(offset.AsSpan(0, 4));
+        }
+
+        return result;
     }
 
     private static async Task<int> ReadVersion(Stream stream, byte[] fourByteBuffer)

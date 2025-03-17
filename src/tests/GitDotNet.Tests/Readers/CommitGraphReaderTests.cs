@@ -16,13 +16,13 @@ public class CommitGraphReaderTests
         // Arrange
         var fileSystem = new MockFileSystem();
         fileSystem.AddFile(".git/objects/info/commit-graph", new MockFileData(Resource.CommitGraph));
-        var sut = CommitGraphReader.Load(".git/objects",
+        using var sut = CommitGraphReader.Load(".git/objects",
                                          A.Fake<IObjectResolver>(),
                                          fileSystem,
                                          p => fileSystem.CreateOffsetReader(p))!;
 
         // Act
-        var commit = sut.Get(new HashId("86fe932f320a5524668a9de2023ab4860601c67f"));
+        var commit = sut.Get("86fe932f320a5524668a9de2023ab4860601c67f");
 
         // Assert
         using (new AssertionScope())
@@ -39,13 +39,13 @@ public class CommitGraphReaderTests
         // Arrange
         var fileSystem = new MockFileSystem();
         fileSystem.AddFile(".git/objects/info/commit-graph", new MockFileData(Resource.MergeCommitGraph));
-        var sut = CommitGraphReader.Load(".git/objects",
+        using var sut = CommitGraphReader.Load(".git/objects",
                                          A.Fake<IObjectResolver>(),
                                          fileSystem,
                                          p => fileSystem.CreateOffsetReader(p))!;
 
         // Act
-        var commit = sut.Get(new HashId("2e18708dc062f5d1c9f94e82b39081f9bdc17d82"));
+        var commit = sut.Get("2e18708dc062f5d1c9f94e82b39081f9bdc17d82");
 
         // Assert
         using (new AssertionScope())
@@ -64,13 +64,13 @@ public class CommitGraphReaderTests
         // Arrange
         var fileSystem = new MockFileSystem();
         fileSystem.AddFile(".git/objects/info/commit-graph", new MockFileData(Resource.MultiParentMergeCommitGraph));
-        var sut = CommitGraphReader.Load(".git/objects",
-                                         A.Fake<IObjectResolver>(),
-                                         fileSystem,
-                                         p => fileSystem.CreateOffsetReader(p))!;
+        using var sut = CommitGraphReader.Load(".git/objects",
+                                               A.Fake<IObjectResolver>(),
+                                               fileSystem,
+                                               p => fileSystem.CreateOffsetReader(p))!;
 
         // Act
-        var commit = sut.Get(new HashId("36010d7f7c4503ff54ba5989cbb0404ae989b5e7"));
+        var commit = sut.Get("36010d7f7c4503ff54ba5989cbb0404ae989b5e7");
 
         // Assert
         using (new AssertionScope())

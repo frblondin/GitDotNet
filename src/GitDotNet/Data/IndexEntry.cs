@@ -45,7 +45,7 @@ public record IndexEntry
 
     /// <summary>Gets the associated Git entry.</summary>
     /// <returns>The associated Git entry.</returns>
-    public async Task<Entry> GetEntry() => _entry ??= await _objectResolver.GetAsync<Entry>(Id);
+    public async Task<Entry> GetEntryAsync() => _entry ??= await _objectResolver.GetAsync<Entry>(Id);
 
     /// <summary>Prints the members of the <see cref="IndexEntry"/> to the provided <see cref="StringBuilder"/>.</summary>
     /// <param name="builder">The <see cref="StringBuilder"/> to append the member information to.</param>
@@ -62,6 +62,7 @@ public record IndexEntry
     }
 
     /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
     public override string ToString()
     {
         var result = new StringBuilder();

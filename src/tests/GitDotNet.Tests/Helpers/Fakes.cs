@@ -11,7 +11,7 @@ internal static class Fakes
 {
     internal static RepositoryInfo CreateBareInfoProvider(string path, ConfigReaderFactory configReaderFactory, IFileSystem fileSystem) =>
         A.Fake<RepositoryInfo>(o => o
-            .WithArgumentsForConstructor(() => new(path, configReaderFactory, fileSystem))
+            .WithArgumentsForConstructor(() => new(path, configReaderFactory, fileSystem, new GitCliCommand()))
             .ConfigureFake(info =>
             {
                 A.CallTo(() => info.Path).Returns(path);

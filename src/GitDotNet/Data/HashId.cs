@@ -6,6 +6,7 @@ using GitDotNet.Tools;
 namespace GitDotNet;
 
 /// <summary>Represents a hash identifier.</summary>
+[ExcludeFromCodeCoverage]
 #if NET8_0
 public sealed partial class HashId : IEquatable<HashId>, IComparable<HashId>
 #else
@@ -44,6 +45,10 @@ public sealed partial class HashId : IEquatable<HashId>, IComparable<HashId>, IC
     /// <summary>Converts a byte array to a <see cref="HashId"/>.</summary>
     /// <param name="hash">The byte array.</param>
     public static implicit operator HashId(byte[] hash) => new(hash);
+
+    /// <summary>Converts a string to a <see cref="HashId"/>.</summary>
+    /// <param name="hash">The string hash.</param>
+    public static implicit operator HashId(string hash) => new(hash);
 
     /// <summary>Tries to parse the specified string as a <see cref="HashId"/>.</summary>
     /// <param name="hash">The string to parse.</param>

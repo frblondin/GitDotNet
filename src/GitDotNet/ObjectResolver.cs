@@ -8,10 +8,10 @@ using System.IO.Abstractions;
 
 namespace GitDotNet;
 
-internal delegate Objects ObjectsFactory(string repositoryPath, bool useReadCommitGraph);
+internal delegate IObjectResolver ObjectsFactory(string repositoryPath, bool useReadCommitGraph);
 
 /// <summary>Represents a collection of Git objects in a repository.</summary>
-public partial class Objects : IDisposable, IObjectResolver
+internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
 {
     internal const int HashLength = 20;
     private readonly bool _useReadCommitGraph;
@@ -25,14 +25,14 @@ public partial class Objects : IDisposable, IObjectResolver
     private readonly CancellationTokenSource _disposed = new();
     private bool _disposedValue;
 
-    internal Objects(string repositoryPath, bool useReadCommitGraph,
-                     IOptions<GitConnection.Options> options,
-                     LooseReaderFactory looseReaderFactory,
-                     PackReaderFactory packReaderFactory,
-                     LfsReaderFactory lfsReaderFactory,
-                     CommitGraphReaderFactory commitReaderFactory,
-                     IMemoryCache memoryCache,
-                     IFileSystem fileSystem)
+    internal ObjectResolver(string repositoryPath, bool useReadCommitGraph,
+                            IOptions<GitConnection.Options> options,
+                            LooseReaderFactory looseReaderFactory,
+                            PackReaderFactory packReaderFactory,
+                            LfsReaderFactory lfsReaderFactory,
+                            CommitGraphReaderFactory commitReaderFactory,
+                            IMemoryCache memoryCache,
+                            IFileSystem fileSystem)
     {
         Path = fileSystem.Path.Combine(repositoryPath, "objects");
         _fileSystem = fileSystem;
@@ -47,12 +47,12 @@ public partial class Objects : IDisposable, IObjectResolver
         PackReaders = ReinitializePacks();
     }
 
-    internal ImmutableDictionary<string, Lazy<PackReader>> PackReaders { get; private set; }
+    public ImmutableDictionary<string, Lazy<PackReader>> PackReaders { get; private set; }
 
     /// <summary>Gets the path to the Git objects directory.</summary>
     public string Path { get; init; }
 
-    internal ImmutableDictionary<string, Lazy<PackReader>> ReinitializePacks()
+    public ImmutableDictionary<string, Lazy<PackReader>> ReinitializePacks()
     {
         DisposePacks();
 
@@ -70,7 +70,7 @@ public partial class Objects : IDisposable, IObjectResolver
     }
 
     [ExcludeFromCodeCoverage]
-    async Task<byte[]> IObjectResolver.GetDataAsync(HashId id) => (await GetUnlinkedEntryAsync(id, throwIfNotFound: true)).Data;
+    async Task<byte[]> IObjectResolverInternal.GetDataAsync(HashId id) => (await GetUnlinkedEntryAsync(id, throwIfNotFound: true)).Data;
 
     [ExcludeFromCodeCoverage]
     internal async Task<UnlinkedEntry> GetUnlinkedEntryAsync(HashId id) => await GetUnlinkedEntryAsync(id, throwIfNotFound: true);
@@ -81,7 +81,7 @@ public partial class Objects : IDisposable, IObjectResolver
 
     private async Task<UnlinkedEntry?> ReadUnlinkedEntryAsync(ICacheEntry entry, HashId id, bool throwIfNotFound)
     {
-        ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(Objects));
+        ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(ObjectResolver));
 
         // Read loose object
         var hexString = id.ToString();
@@ -104,36 +104,16 @@ public partial class Objects : IDisposable, IObjectResolver
         async Task<UnlinkedEntry> GetDependentObjectAsync(HashId h) => await GetUnlinkedEntryAsync(h, throwIfNotFound: true);
     }
 
-    /// <summary>Retrieves a Git object by its hash.</summary>
-    /// <param name="id">The hash of the Git object.</param>
-    /// <returns>The Git object associated with the specified hash.</returns>
     public async Task<TEntry> GetAsync<TEntry>(HashId id) where TEntry : Entry =>
         await GetAsync<TEntry>(id, throwIfNotFound: true);
 
-    /// <summary>Retrieves a Git object by its hash.</summary>
-    /// <param name="id">The hash of the Git object.</param>
-    /// <param name="throwIfNotFound">A value indicating whether to throw an exception if the object is not found.</param>
-    /// <returns>The Git object associated with the specified hash.</returns>
     public async Task<TEntry> GetAsync<TEntry>(HashId id, bool throwIfNotFound) where TEntry : Entry =>
         (await _memoryCache.GetOrCreateAsync((id, nameof(Entry)),
                                              async entry => await ReadAsync<TEntry>(entry, id, throwIfNotFound)))!;
 
-    /// <summary>Retrieves a Git object by its hash.</summary>
-    /// <param name="hash">The hash of the Git object as a hexadecimal string.</param>
-    /// <returns>The Git object associated with the specified hash.</returns>
-    public async Task<TEntry> GetAsync<TEntry>(string hash) where TEntry : Entry =>
-        await GetAsync<TEntry>(hash.HexToByteArray(), throwIfNotFound: true);
-
-    /// <summary>Retrieves a Git object by its hash.</summary>
-    /// <param name="hash">The hash of the Git object as a hexadecimal string.</param>
-    /// <param name="throwIfNotFound">A value indicating whether to throw an exception if the object is not found.</param>
-    /// <returns>The Git object associated with the specified hash.</returns>
-    public async Task<TEntry> GetAsync<TEntry>(string hash, bool throwIfNotFound) where TEntry : Entry =>
-        await GetAsync<TEntry>(hash.HexToByteArray(), throwIfNotFound);
-
     private async Task<TEntry?> ReadAsync<TEntry>(ICacheEntry entry, HashId id, bool throwIfNotFound) where TEntry : Entry
     {
-        ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(Objects));
+        ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(ObjectResolver));
 
         TEntry? result = null;
         if (typeof(TEntry) == typeof(CommitEntry) && _useReadCommitGraph && _commitReader.Value is not null)
@@ -189,7 +169,7 @@ public partial class Objects : IDisposable, IObjectResolver
     internal Entry CreateEntry(UnlinkedEntry entry) =>
         CreateEntry(entry.Type, entry.Id, entry.Data);
 
-    /// <summary>Releases all resources used by the current instance of the <see cref="Objects"/> class.</summary>
+    /// <summary>Releases all resources used by the current instance of the <see cref="ObjectResolver"/> class.</summary>
     protected virtual void Dispose(bool disposing)
     {
         if (!_disposedValue)
@@ -225,9 +205,28 @@ public partial class Objects : IDisposable, IObjectResolver
     }
 }
 
-internal interface IObjectResolver
+/// <summary>Represents a collection of Git objects in a repository.</summary>
+public interface IObjectResolver : IDisposable
+{
+    /// <summary>Retrieves a Git object by its hash.</summary>
+    /// <param name="id">The hash of the Git object.</param>
+    /// <returns>The Git object associated with the specified hash.</returns>
+    Task<TEntry> GetAsync<TEntry>(HashId id) where TEntry : Entry;
+
+    /// <summary>Retrieves a Git object by its hash.</summary>
+    /// <param name="id">The hash of the Git object.</param>
+    /// <param name="throwIfNotFound">A value indicating whether to throw an exception if the object is not found.</param>
+    /// <returns>The Git object associated with the specified hash.</returns>
+    Task<TEntry> GetAsync<TEntry>(HashId id, bool throwIfNotFound) where TEntry : Entry;
+}
+
+internal interface IObjectResolverInternal
 {
     Task<byte[]> GetDataAsync(HashId id);
 
     Task<TEntry> GetAsync<TEntry>(HashId id) where TEntry : Entry;
+
+    ImmutableDictionary<string, Lazy<PackReader>> ReinitializePacks();
+
+    ImmutableDictionary<string, Lazy<PackReader>> PackReaders { get; }
 }

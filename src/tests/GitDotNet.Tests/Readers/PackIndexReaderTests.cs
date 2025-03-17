@@ -35,6 +35,16 @@ public class PackIndexReaderTests
         text.Should().Be(Resource.OfsDeltaContent.ReplaceLineEndings());
     }
 
+    [Test]
+    public async Task CheckForAmbiguousHashDoesNotThrow()
+    {
+        // Arrange
+        var hashId = new HashId([254, 232, 75, 85]);
+
+        // Act, Assert
+        await sut.IndexOfAsync(hashId);
+    }
+
     private PackReader sut;
 
     [SetUp]
@@ -43,7 +53,7 @@ public class PackIndexReaderTests
         var fileSystem = new MockFileSystem();
         fileSystem.AddFile(".git/objects/packs/data.pack", new MockFileData(Resource.Pack));
         fileSystem.AddFile(".git/objects/packs/data.idx", new MockFileData(Resource.PackIndex));
-        var objects = A.Fake<Objects>(o => o.WithArgumentsForConstructor(() =>
+        var objects = A.Fake<ObjectResolver>(o => o.WithArgumentsForConstructor(() =>
             new(".git", true,
                 Options.Create(new GitConnection.Options()),
                 path => CreateLooseReader(path, fileSystem),

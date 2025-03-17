@@ -22,7 +22,7 @@ public class ObjectsTests
                 A.CallTo(() => fake.TryLoad("0123456789abcdef0123456789abcdef01234567"))
                  .Returns((EntryType.Blob, () => new MemoryStream([42]), 1)));
         });
-        var sut = new Objects(".git", useReadCommitGraph: true,
+        var sut = new ObjectResolver(".git", useReadCommitGraph: true,
                               Options.Create(new GitConnection.Options()),
                               _ => looseReader,
                               _ => throw new NotImplementedException(),

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
 using System.Text.RegularExpressions;
 using GitDotNet.Readers;
@@ -14,7 +15,7 @@ public delegate GitConnection GitConnectionProvider(string path);
 /// <summary>Represents a Git repository.</summary>
 public partial class GitConnection : IDisposable
 {
-    private readonly Lazy<Objects> _objects;
+    private readonly Lazy<IObjectResolver> _objects;
     private readonly BranchRefReader _branchRefReader;
     private readonly Lazy<Index> _index;
     private readonly IDisposable _lock;
@@ -49,9 +50,10 @@ public partial class GitConnection : IDisposable
     public RepositoryInfo Info { get; }
 
     /// <summary>Gets the <see cref="Objects"/> instance associated with the repository.</summary>
-    public Objects Objects => _objects.Value;
+    public IObjectResolver Objects => _objects.Value;
 
     /// <summary>Gets the <see cref="Index"/> instance associated with the repository.</summary>
+    [ExcludeFromCodeCoverage]
     public Index Index => _index.Value;
 
     /// <summary>Gets the reference of the HEAD.</summary>
@@ -83,27 +85,31 @@ public partial class GitConnection : IDisposable
     public async Task<CommitEntry> GetCommittishAsync(string committish)
     {
         var reference = committish;
-        var match = RelativeRefRegex().Match(committish);
-        if (match.Success)
+        var matches = ChainedRelativeRefRegex().Matches(committish);
+        if (matches.Count > 0)
         {
-            reference = match.Groups["ref"].Value;
-            var op = match.Groups["op"].Value;
-            var num = string.IsNullOrEmpty(match.Groups["num"].Value) ? 1 : int.Parse(match.Groups["num"].Value);
-
+            reference = matches[0].Groups["ref"].Value;
             var commit = await GetReferenceTipAsync(reference);
-            for (int i = 0; i < num; i++)
+
+            foreach (Match match in matches)
             {
-                var parents = await commit.GetParentsAsync();
+                var op = match.Groups["op"].Value;
+                var num = string.IsNullOrEmpty(match.Groups["num"].Value) ? 1 : int.Parse(match.Groups["num"].Value);
+
                 if (op == "~")
                 {
-                    commit = parents[0];
+                    for (int i = 0; i < num; i++)
+                    {
+                        var parents = await commit.GetParentsAsync();
+                        commit = parents[0];
+                    }
                 }
                 else if (op == "^")
                 {
-                    commit = parents.Skip(i).First();
+                    var parents = await commit.GetParentsAsync();
+                    commit = parents[num - 1];
                 }
             }
-
             return commit;
         }
         else
@@ -172,7 +178,7 @@ public partial class GitConnection : IDisposable
         transformations(composer);
 
         var hash = await composer.CommitAsync(canonicalName, commitWithParent, updateBranch);
-        Objects.ReinitializePacks();
+        (Objects as IObjectResolverInternal)?.ReinitializePacks();
         return await Objects.GetAsync<CommitEntry>(hash);
     }
 
@@ -190,7 +196,7 @@ public partial class GitConnection : IDisposable
     /// <summary>Determines whether the specified path is a valid Git repository.</summary>
     /// <param name="path">The path to the repository.</param>
     /// <returns>true if the path is a valid Git repository; otherwise, false.</returns>
-    public static bool IsValid(string path) => GitCliCommand.GetAbsoluteGitPath(path) != null;
+    public static bool IsValid(string path) => new GitCliCommand().GetAbsoluteGitPath(path) != null;
 
     /// <summary>Creates a new Git repository at the specified path.</summary>
     /// <param name="path">The path to the repository.</param>
@@ -220,6 +226,7 @@ public partial class GitConnection : IDisposable
     }
 
     /// <summary>Finalizes an instance of the <see cref="GitConnection"/> class.</summary>
+    [ExcludeFromCodeCoverage]
     ~GitConnection()
     {
         // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
@@ -234,6 +241,6 @@ public partial class GitConnection : IDisposable
 
     [GeneratedRegex(@"^ref:\s*(.+)$")]
     private static partial Regex HeadRefRegex();
-    [GeneratedRegex(@"^(?<ref>.+?)(?<op>[~^])(?<num>\d*)$")]
-    private static partial Regex RelativeRefRegex();
+    [GeneratedRegex(@"(?<ref>^[^~^]+)(?<op>[~^])(?<num>\d*)")]
+    private static partial Regex ChainedRelativeRefRegex();
 }

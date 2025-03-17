@@ -1,3 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
+
+[ExcludeFromCodeCoverage]
 internal static class AsyncHelper
 {
     private static readonly TaskFactory _taskFactory = new(CancellationToken.None,

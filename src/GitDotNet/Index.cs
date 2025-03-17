@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
 using GitDotNet.Readers;
 
@@ -6,6 +7,7 @@ namespace GitDotNet;
 internal delegate Index IndexFactory(string repositoryPath, IObjectResolver objectResolver);
 
 /// <summary>Represents a Git index file.</summary>
+[ExcludeFromCodeCoverage]
 public class Index : IDisposable
 {
     private readonly IndexReader _indexReader;

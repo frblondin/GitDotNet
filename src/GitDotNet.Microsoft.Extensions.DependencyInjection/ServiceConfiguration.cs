@@ -35,10 +35,12 @@ public static class ServiceConfiguration
     }
 
     private static IServiceCollection AddMain(this IServiceCollection services) => services
+        .AddScoped<GitCliCommand>()
         .AddScoped<RepositoryInfoFactory>(sp => path =>
             new(path,
                 sp.GetRequiredService<ConfigReaderFactory>(),
-                sp.GetRequiredService<IFileSystem>()))
+                sp.GetRequiredService<IFileSystem>(),
+                sp.GetRequiredService<GitCliCommand>()))
         .AddScoped<GitConnectionProvider>(sp => path =>
             new(path,
                 sp.GetRequiredService<RepositoryInfoFactory>(),
@@ -65,7 +67,8 @@ public static class ServiceConfiguration
         .AddScoped<IndexFactory>(sp => (repositoryPath, entryProvider) =>
             new(repositoryPath, entryProvider, sp.GetRequiredService<IndexReaderFactory>(), sp.GetRequiredService<IFileSystem>()))
         .AddScoped<ObjectsFactory>(sp => (path, useReadCommitGraph) =>
-            new(path,
+            new ObjectResolver(
+                path,
                 useReadCommitGraph,
                 sp.GetRequiredService<IOptions<GitConnection.Options>>(),
                 sp.GetRequiredService<LooseReaderFactory>(),

@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using FluentAssertions;
@@ -8,6 +9,118 @@ namespace GitDotNet.Tools.Tests;
 
 public partial class GitPatchCreatorTests
 {
+    [Test]
+    public void GetDiffStat_NoChanges_WritesNoChanges()
+    {
+        // Arrange
+        var changes = new List<Change>();
+        using var stream = new MemoryStream();
+
+        // Act
+        using (var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true) { NewLine = "\n" })
+        {
+            GitPatchCreator.GetDiffStat(writer, changes);
+        }
+        stream.Position = 0;
+        var content = new StreamReader(stream).ReadToEnd();
+
+        // Assert
+        content.Should().Be(" 0 file changed\n\n");
+    }
+
+    [Test]
+    public void GetDiffStat_Modifications_WritesModifications()
+    {
+        // Arrange
+        var changes = new List<Change>
+            {
+                new(ChangeType.Modified, null, null, null, null),
+                new(ChangeType.Renamed, null, null, null, null)
+            };
+        using var stream = new MemoryStream();
+
+        // Act
+        using (var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true) { NewLine = "\n" })
+        {
+            GitPatchCreator.GetDiffStat(writer, changes);
+        }
+        stream.Position = 0;
+        var content = new StreamReader(stream).ReadToEnd();
+
+        // Assert
+        content.Should().Be(" 2 files changed\n\n");
+    }
+
+    [Test]
+    public void GetDiffStat_Additions_WritesAdditions()
+    {
+        // Arrange
+        var changes = new List<Change>
+            {
+                new(ChangeType.Added, null, null, null, null),
+                new(ChangeType.Added, null, null, null, null)
+            };
+        using var stream = new MemoryStream();
+
+        // Act
+        using (var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true) { NewLine = "\n" })
+        {
+            GitPatchCreator.GetDiffStat(writer, changes);
+        }
+        stream.Position = 0;
+        var content = new StreamReader(stream).ReadToEnd();
+
+        // Assert
+        content.Should().Be(" 2 insertions(+)\n\n");
+    }
+
+    [Test]
+    public void GetDiffStat_Deletions_WritesDeletions()
+    {
+        // Arrange
+        var changes = new List<Change>
+            {
+                new(ChangeType.Removed, null, null, null, null),
+                new(ChangeType.Removed, null, null, null, null)
+            };
+        using var stream = new MemoryStream();
+
+        // Act
+        using (var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true) { NewLine = "\n" })
+        {
+            GitPatchCreator.GetDiffStat(writer, changes);
+        }
+        stream.Position = 0;
+        var content = new StreamReader(stream).ReadToEnd();
+
+        // Assert
+        content.Should().Be(" 2 deletions(-)\n\n");
+    }
+
+    [Test]
+    public void GetDiffStat_MixedChanges_WritesAllChanges()
+    {
+        // Arrange
+        var changes = new List<Change>
+            {
+                new(ChangeType.Modified, null, null, null, null),
+                new(ChangeType.Added, null, null, null, null),
+                new(ChangeType.Removed, null, null, null, null)
+            };
+        using var stream = new MemoryStream();
+
+        // Act
+        using (var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true) { NewLine = "\n" })
+        {
+            GitPatchCreator.GetDiffStat(writer, changes);
+        }
+        stream.Position = 0;
+        var content = new StreamReader(stream).ReadToEnd();
+
+        // Assert
+        content.Should().Be(" 1 file changed, 1 insertion(+), 1 deletion(-)\n\n");
+    }
+
     [Test]
     public void BothContentsNull_ReturnsEmptyList()
     {
