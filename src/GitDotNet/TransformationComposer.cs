@@ -10,7 +10,7 @@ internal delegate ITransformationComposerInternal TransformationComposerFactory(
 
 [DebuggerDisplay("Count = {Count}")]
 internal class TransformationComposer(string repositoryPath, FastInsertWriterFactory FastInsertWriterFactory, IFileSystem fileSystem)
-    : ITransformationComposer, ITransformationComposerInternal
+    : ITransformationComposerInternal
 {
     internal Dictionary<string, (TransformationType ChangeType, Stream? Stream)> Changes { get; } = [];
 
@@ -84,7 +84,7 @@ internal class TransformationComposer(string repositoryPath, FastInsertWriterFac
     {
         var folder = fileSystem.Path.Combine(repositoryPath, "temp");
         fileSystem.Directory.CreateDirectory(folder);
-        var markFile = fileSystem.Path.Combine(folder, fileSystem.Path.GetFileName(fileSystem.Path.GetTempFileName()));
+        var markFile = fileSystem.Path.Combine(folder, fileSystem.Path.GetRandomFileName());
         return markFile;
     }
 

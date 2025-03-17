@@ -4,7 +4,7 @@ namespace GitDotNet.Writers;
 
 internal delegate FastInsertWriter FastInsertWriterFactory(Stream stream);
 
-internal class FastInsertWriter : IDisposable
+internal sealed class FastInsertWriter : IDisposable
 {
     private readonly StreamWriter _writer;
 
@@ -42,34 +42,33 @@ internal class FastInsertWriter : IDisposable
         }
     }
 
-    public async Task WriteHeaderAsync(string branch,
-                                       CommitEntry commit)
+    public async Task WriteHeaderAsync(string branch, CommitEntry commit)
     {
-        _writer.WriteLine($"reset {branch}");
-        _writer.WriteLine($"commit {branch}");
-        _writer.WriteLine($"mark :1");
-        if (commit.Author is not null) WriteSignature("author", commit.Author);
-        if (commit.Committer is not null) WriteSignature("committer", commit.Committer);
-        _writer.WriteLine($"data {Encoding.UTF8.GetByteCount(commit.Message)}");
-        _writer.WriteLine(commit.Message);
-        WriteParentCommits(await commit.GetParentsAsync());
+        await _writer.WriteLineAsync($"reset {branch}");
+        await _writer.WriteLineAsync($"commit {branch}");
+        await _writer.WriteLineAsync($"mark :1");
+        if (commit.Author is not null) await WriteSignatureAsync("author", commit.Author);
+        if (commit.Committer is not null) await WriteSignatureAsync("committer", commit.Committer);
+        await _writer.WriteLineAsync($"data {Encoding.UTF8.GetByteCount(commit.Message)}");
+        await _writer.WriteLineAsync(commit.Message);
+        await WriteParentCommitsAsync(await commit.GetParentsAsync());
     }
 
-    private void WriteSignature(string type, Signature signature) => _writer.WriteLine(
+    private async Task WriteSignatureAsync(string type, Signature signature) => await _writer.WriteLineAsync(
         $"{type} " +
         $"{signature.Name} " +
         $"<{signature.Email}> " +
         $"{signature.Timestamp.ToUnixTimeSeconds()} " +
         $"{signature.Timestamp.Offset.Minutes:+0000;-0000}");
 
-    private void WriteParentCommits(IList<CommitEntry> parents)
+    private async Task WriteParentCommitsAsync(IList<CommitEntry> parents)
     {
         if (parents.Count >= 1)
         {
-            _writer.WriteLine($"from {parents[0].Id}");
+            await _writer.WriteLineAsync($"from {parents[0].Id}");
             if (parents.Count >= 2)
             {
-                _writer.WriteLine($"merge {parents[1].Id}");
+                await _writer.WriteLineAsync($"merge {parents[1].Id}");
             }
         }
     }

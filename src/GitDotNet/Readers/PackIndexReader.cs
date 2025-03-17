@@ -136,7 +136,7 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         {
             var mid = (start + end) / 2;
             stream.Seek(SortedObjectNamesOffset + mid * 20, SeekOrigin.Begin);
-            await stream.ReadAsync(hashBuffer.AsMemory(0, ObjectResolver.HashLength));
+            await stream.ReadExactlyAsync(hashBuffer.AsMemory(0, ObjectResolver.HashLength));
 
             var comparison = id.CompareTo(hashBuffer.AsSpan(0, id.Hash.Count));
             if (comparison == 0)
@@ -174,7 +174,7 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         try
         {
             stream.Seek(PackFilePositionOffset + index * 4, SeekOrigin.Begin);
-            await stream.ReadAsync(offset.AsMemory(0, 4));
+            await stream.ReadExactlyAsync(offset.AsMemory(0, 4));
             var result = (long)BinaryPrimitives.ReadInt32BigEndian(offset.AsSpan(0, 4));
             result = await CalculateLargePackFileOffset(index, stream, offset, result);
             return result;
@@ -192,7 +192,7 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         if (result > 0x80000000)
         {
             stream.Seek(LargePackFilePositionOffset + index * 8, SeekOrigin.Begin);
-            await stream.ReadAsync(offset.AsMemory(0, 8));
+            await stream.ReadExactlyAsync(offset.AsMemory(0, 8));
             result = BinaryPrimitives.ReadInt32BigEndian(offset.AsSpan(0, 4));
         }
 

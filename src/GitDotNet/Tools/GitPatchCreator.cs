@@ -18,7 +18,7 @@ internal partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnif
             NewLine = "\n"
         };
 
-        GetHeader(writer, start, end);
+        await GetHeaderAsync(writer, start, end);
         GetDiffStat(writer, changes);
 
         var indexLine = $"index {start.Id.ToString()[..7]}..{end.Id.ToString()[..7]}";
@@ -28,14 +28,14 @@ internal partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnif
         }
     }
 
-    private static void GetHeader(StreamWriter writer, CommitEntry start, CommitEntry end)
+    private static async Task GetHeaderAsync(StreamWriter writer, CommitEntry start, CommitEntry end)
     {
         var author = end.Author ?? throw new InvalidOperationException("Author is required.");
-        writer.WriteLine($"From {start.Id} {author.Timestamp:ddd MMM dd HH:mm:ss yyyy}");
-        writer.WriteLine($"From: {author.Name} <{author.Email}>");
-        writer.WriteLine($"Date: {author.Timestamp:ddd, dd MMM yyyy HH:mm:ss +0000}");
-        writer.WriteLine($"Subject: [PATCH] {end.Message}");
-        writer.WriteLine();
+        await writer.WriteLineAsync($"From {start.Id} {author.Timestamp:ddd MMM dd HH:mm:ss yyyy}");
+        await writer.WriteLineAsync($"From: {author.Name} <{author.Email}>");
+        await writer.WriteLineAsync($"Date: {author.Timestamp:ddd, dd MMM yyyy HH:mm:ss +0000}");
+        await writer.WriteLineAsync($"Subject: [PATCH] {end.Message}");
+        await writer.WriteLineAsync();
     }
 
     internal static void GetDiffStat(StreamWriter writer, IList<Change> changes)
@@ -45,30 +45,49 @@ internal partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnif
         var additions = changes.Count(c => c.Type == ChangeType.Added);
         var deletions = changes.Count(c => c.Type == ChangeType.Removed);
         bool empty = true;
+
+        empty = WriteModifications(writer, modifications, additions, deletions, empty);
+        WriteAdditions(writer, additions, empty);
+        WriteDeletions(writer, deletions, empty);
+
+        writer.WriteLine();
+        writer.WriteLine();
+    }
+
+    private static bool WriteModifications(StreamWriter writer, int modifications, int additions, int deletions, bool empty)
+    {
         if (modifications > 0 || (additions == 0 && deletions == 0))
         {
             writer.Write($"{modifications} {(modifications > 1 ? "files" : "file")} changed");
             empty = false;
         }
+
+        return empty;
+    }
+
+    private static void WriteAdditions(StreamWriter writer, int additions, bool empty)
+    {
         if (additions > 0)
         {
             if (!empty) writer.Write(", ");
             writer.Write($"{additions} {(additions > 1 ? "insertions(+)" : "insertion(+)")}");
         }
+    }
+
+    private static void WriteDeletions(StreamWriter writer, int deletions, bool empty)
+    {
         if (deletions > 0)
         {
             if (!empty) writer.Write(", ");
             writer.Write($"{deletions} {(deletions > 1 ? "deletions(-)" : "deletion(-)")}");
         }
-        writer.WriteLine();
-        writer.WriteLine();
     }
 
     private async Task CreatePatchAsync(StreamWriter writer, Change change, string indexLine)
     {
-        WritePath(writer, "--- a/", change.OldPath);
-        WritePath(writer, "+++ b/", change.NewPath);
-        writer.WriteLine($"{indexLine} {change.New?.Mode ?? change.Old?.Mode}");
+        await WritePathAsync(writer, "--- a/", change.OldPath);
+        await WritePathAsync(writer, "+++ b/", change.NewPath);
+        await writer.WriteLineAsync($"{indexLine} {change.New?.Mode ?? change.Old?.Mode}");
 
         // Hunks
         var oldBlob = change.Old is not null ? await change.Old.GetEntryAsync<BlobEntry>() : null;
@@ -96,17 +115,17 @@ internal partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnif
         }
     }
 
-    private static void WritePath(StreamWriter writer, string prefix, GitPath? path)
+    private static async Task WritePathAsync(StreamWriter writer, string prefix, GitPath? path)
     {
         writer.Write(prefix);
         if (path is null)
         {
-            writer.WriteLine("dev/null");
+            await writer.WriteLineAsync("dev/null");
         }
         else
         {
             path.AppendTo(writer);
-            writer.WriteLine();
+            await writer.WriteLineAsync();
         }
     }
 
@@ -122,7 +141,7 @@ internal partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnif
         int oldLineNum = 0, newLineNum = 0;
         int unchangedLineCount = 0;
 
-        foreach (var (type, aItem, bItem) in changes)
+        foreach (var (type, _, _) in changes)
         {
             if (type == ResultType.Both)
             {

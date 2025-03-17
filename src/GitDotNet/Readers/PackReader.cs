@@ -11,6 +11,7 @@ internal delegate PackReader PackReaderFactory(string path);
 internal class PackReader(IFileOffsetStreamReader offsetStreamReader, IOptions<GitConnection.Options> options, PackIndexFactory indexFactory, IMemoryCache memoryCache) : IDisposable
 {
     private PackIndexReader? _index;
+    private bool _disposedValue;
     private readonly CancellationTokenSource _disposed = new();
 
     public async Task<int> IndexOfAsync(HashId id)
@@ -114,7 +115,8 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, IOptions<G
     private static async Task<UnlinkedEntry> ReconstructRefDeltaAsync(Stream stream, Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider)
     {
         var hash = new byte[20];
-        if (stream.Read(hash) != hash.Length)
+        var length = await stream.ReadAsync(hash);
+        if (length != hash.Length)
         {
             throw new EndOfStreamException("Unexpected end of stream while reading ref delta hash.");
         }
@@ -251,11 +253,29 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, IOptions<G
         }
     }
 
+    /// <summary>
+    /// Cleans up resources used by the object, allowing for both managed and unmanaged resource disposal.
+    /// </summary>
+    /// <param name="disposing">Indicates whether to release both managed and unmanaged resources or just unmanaged resources.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                if (!_disposed.IsCancellationRequested) _disposed.Cancel();
+                _disposed.Dispose();
+                offsetStreamReader.Dispose();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
     public void Dispose()
     {
-        if (!_disposed.IsCancellationRequested) _disposed.Cancel();
-        _disposed.Dispose();
-        offsetStreamReader.Dispose();
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
         GC.SuppressFinalize(this);
     }
 }

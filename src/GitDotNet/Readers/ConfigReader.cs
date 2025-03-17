@@ -10,7 +10,7 @@ internal delegate ConfigReader ConfigReaderFactory(string path);
 public class ConfigReader
 {
     private readonly IFileSystem _fileSystem;
-    private readonly IImmutableDictionary<string, IImmutableDictionary<string, string>> _sections;
+    private readonly ImmutableDictionary<string, IImmutableDictionary<string, string>> _sections;
 
     internal ConfigReader(string path, IFileSystem fileSystem)
     {
@@ -22,6 +22,9 @@ public class ConfigReader
     /// <summary>Gets the path to the Git configuration file.</summary>
     public string Path { get; }
 
+    /// <summary>Loads configuration data from a specified file, organizing it into sections and key-value pairs.</summary>
+    /// <returns>An immutable dictionary containing sections and their corresponding key-value pairs.</returns>
+    /// <exception cref="FileNotFoundException">Thrown when the specified configuration file does not exist.</exception>
     protected virtual ImmutableDictionary<string, IImmutableDictionary<string, string>> LoadConfig()
     {
         if (!_fileSystem.File.Exists(Path))
@@ -38,7 +41,7 @@ public class ConfigReader
         {
             var trimmedLine = line.Trim();
 
-            if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith(";") || trimmedLine.StartsWith("#"))
+            if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith(';') || trimmedLine.StartsWith('#'))
             {
                 continue; // Skip empty lines and comments
             }

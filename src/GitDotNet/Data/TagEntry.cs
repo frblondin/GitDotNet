@@ -96,5 +96,5 @@ public sealed record class TagEntry : Entry
         _ => throw new InvalidOperationException($"Invalid tag entry type: {type}")
     };
 
-    private record class Content(string Object, EntryType Type, string Tag, Signature? Tagger, string Message);
+    private sealed record class Content(string Object, EntryType Type, string Tag, Signature? Tagger, string Message);
 }

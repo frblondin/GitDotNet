@@ -143,6 +143,17 @@ public class PooledMemoryStream(int initialCapacity = 4096) : Stream
     }
 
     /// <inheritdoc />
+    public override void WriteByte(byte value)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, nameof(PooledMemoryStream));
+
+        EnsureCapacity(_position + 1);
+        _buffer[_position++] = value;
+        if (_position > _length)
+            _length = _position;
+    }
+
+    /// <inheritdoc />
     protected override void Dispose(bool disposing)
     {
         if (_disposed)
@@ -169,17 +180,6 @@ public class PooledMemoryStream(int initialCapacity = 4096) : Stream
             ArrayPool<byte>.Shared.Return(_buffer, clearArray: true);
             _buffer = newBuffer;
         }
-    }
-
-    /// <inheritdoc />
-    public override void WriteByte(byte value)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, nameof(PooledMemoryStream));
-
-        EnsureCapacity(_position + 1);
-        _buffer[_position++] = value;
-        if (_position > _length)
-            _length = _position;
     }
 
     /// <inheritdoc />

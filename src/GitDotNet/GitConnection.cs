@@ -96,19 +96,7 @@ public partial class GitConnection : IDisposable
                 var op = match.Groups["op"].Value;
                 var num = string.IsNullOrEmpty(match.Groups["num"].Value) ? 1 : int.Parse(match.Groups["num"].Value);
 
-                if (op == "~")
-                {
-                    for (int i = 0; i < num; i++)
-                    {
-                        var parents = await commit.GetParentsAsync();
-                        commit = parents[0];
-                    }
-                }
-                else if (op == "^")
-                {
-                    var parents = await commit.GetParentsAsync();
-                    commit = parents[num - 1];
-                }
+                commit = await TraverseCommitAsync(commit, op, num);
             }
             return commit;
         }
@@ -123,6 +111,25 @@ public partial class GitConnection : IDisposable
             _ when HashId.TryParse(reference, out var id) => await Objects.GetAsync<CommitEntry>(id),
             _ => await Branches[reference].GetTipAsync(),
         };
+    }
+
+    private static async Task<CommitEntry> TraverseCommitAsync(CommitEntry commit, string op, int num)
+    {
+        if (op == "~")
+        {
+            for (int i = 0; i < num; i++)
+            {
+                var parents = await commit.GetParentsAsync();
+                commit = parents[0];
+            }
+        }
+        else if (op == "^")
+        {
+            var parents = await commit.GetParentsAsync();
+            commit = parents[num - 1];
+        }
+
+        return commit;
     }
 
     /// <summary>Compares two <see cref="TreeEntry"/> instances recursively.</summary>

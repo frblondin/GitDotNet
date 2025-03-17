@@ -8,7 +8,7 @@ using GitDotNet.Tools;
 namespace GitDotNet;
 
 /// <summary>Represents a Git branch.</summary>
-public class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>, IEquatable<Branch>
+public sealed class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>, IEquatable<Branch>
 {
     private readonly Func<Task<CommitEntry>> _tipProvider;
 
@@ -89,15 +89,19 @@ public class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>, IEquat
 
     /// <inheritdoc/>
     [ExcludeFromCodeCoverage]
-    public int CompareTo(Branch? other) => CanonicalName.CompareTo(other?.CanonicalName);
+    public int CompareTo(Branch? other) => StringComparer.Ordinal.Compare(CanonicalName, other?.CanonicalName);
 
     /// <inheritdoc/>
     [ExcludeFromCodeCoverage]
-    public bool Equals(Branch? other) => CanonicalName == other?.CanonicalName;
+    public bool Equals(Branch? other) => StringComparer.Ordinal.Equals(CanonicalName, other?.CanonicalName);
 
     /// <inheritdoc/>
     [ExcludeFromCodeCoverage]
     public override bool Equals(object? obj) => obj is Branch branch && Equals(branch);
+
+    /// <inheritdoc/>
+    [ExcludeFromCodeCoverage]
+    public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(CanonicalName);
 
     /// <inheritdoc/>
     [ExcludeFromCodeCoverage]

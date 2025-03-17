@@ -7,7 +7,7 @@ internal delegate IRepositoryLocker RepositoryLockerFactory(string path);
 internal class RepositoryLocker(string path, IFileSystem fileSystem) : IRepositoryLocker
 {
     private readonly AsyncLocal<bool> _lockTaken = new();
-    private string _lockFilePath = fileSystem.Path.Combine(path, "index.lock");
+    private readonly string _lockFilePath = fileSystem.Path.Combine(path, "index.lock");
 
     public IDisposable GetLock()
     {
@@ -33,7 +33,7 @@ internal class RepositoryLocker(string path, IFileSystem fileSystem) : IReposito
         });
     }
 
-    internal class Disposable(Action Action) : IDisposable
+    internal sealed class Disposable(Action Action) : IDisposable
     {
         internal static IDisposable Empty { get; } = new Disposable(() => { });
 

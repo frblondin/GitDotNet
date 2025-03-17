@@ -15,10 +15,31 @@ internal interface IFileOffsetStreamReader : IDisposable
 internal class FileOffsetStreamReader(string path, long length) : IFileOffsetStreamReader
 {
     private readonly MemoryMappedFile _memoryMappedFile = MemoryMappedFile.CreateFromFile(path, System.IO.FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
+    private bool _disposedValue;
 
     public string Path { get; } = path;
 
     public Stream OpenRead(long offset) => new SlidingMemoryMappedStream(_memoryMappedFile, offset, length);
 
-    public void Dispose() => _memoryMappedFile.Dispose();
+    /// <summary>Cleans up resources, optionally releasing managed resources based on the provided flag.</summary>
+    /// <param name="disposing">Indicates whether to release both managed and unmanaged resources.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                _memoryMappedFile.Dispose();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
+    public void Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
 }

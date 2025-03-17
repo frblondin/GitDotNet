@@ -58,7 +58,7 @@ internal class TreeComparer(IOptions<GitConnection.Options> options) : ITreeComp
             first.ExceptBy(second.Select(x => x.Blob.Id), x => x.Blob.Id).Select(x => (IsNew: isNew, ItemPath: x));
     }
 
-    private static void FindRenamedBlobsWithSameId(IList<Change> result, IEnumerable<BlobEntryPath>? oldBlobs, IEnumerable<BlobEntryPath>? newBlobs)
+    private static void FindRenamedBlobsWithSameId(List<Change> result, IEnumerable<BlobEntryPath>? oldBlobs, IEnumerable<BlobEntryPath>? newBlobs)
     {
         if (oldBlobs is not null && newBlobs is not null)
         {
@@ -72,11 +72,10 @@ internal class TreeComparer(IOptions<GitConnection.Options> options) : ITreeComp
                                      where groupedById.Count() > 1
                                      select
                                      (
-                                        Id: groupedById.Key,
                                         OldItems: groupedById.Where(x => !x.IsNew).Select(x => x.ItemAndPath).ToList(),
                                         NewItems: groupedById.Where(x => x.IsNew).Select(x => x.ItemAndPath).ToList()
                                      );
-            foreach (var (id, oldItems, newItems) in changesGroupedById)
+            foreach (var (oldItems, newItems) in changesGroupedById)
             {
                 if (oldItems.Count == 0 || newItems.Count == 0)
                 {
@@ -104,45 +103,61 @@ internal class TreeComparer(IOptions<GitConnection.Options> options) : ITreeComp
         }
     }
 
-    private static async Task FindRenamedBlobsWithSimilarity(IOptions<GitConnection.Options> options, IList<Change> result)
+    private static async Task FindRenamedBlobsWithSimilarity(IOptions<GitConnection.Options> options, List<Change> result)
     {
         var addedItems = result.Where(c => c.Type == ChangeType.Added).ToList();
         foreach (var removedItem in result.Where(c => c.Type == ChangeType.Removed).ToList())
         {
-            foreach (var addedItem in addedItems)
+            await FindSimilarRenamedBlobs(options, result, addedItems, removedItem);
+        }
+    }
+
+    private static async Task FindSimilarRenamedBlobs(IOptions<GitConnection.Options> options, List<Change> result, List<Change> addedItems, Change removedItem)
+    {
+        foreach (var addedItem in addedItems)
+        {
+            var removedEntry = await removedItem.Old!.GetEntryAsync<BlobEntry>();
+            var addedEntry = await addedItem.New!.GetEntryAsync<BlobEntry>();
+
+            // If size difference is too big, skip levenshtein distance calculation
+            if (removedEntry.Data.Length > 0 || addedEntry.Data.Length > 0)
             {
-                var removedEntry = await removedItem.Old!.GetEntryAsync<BlobEntry>();
-                var addedEntry = await addedItem.New!.GetEntryAsync<BlobEntry>();
-
-                // If size difference is too big, skip levenshtein distance calculation
-                if (removedEntry.Data.Length > 0 || addedEntry.Data.Length > 0)
-                {
-                    var diff = (float)Math.Abs(removedEntry.Data.Length - addedEntry.Data.Length);
-                    var ratio = 1f - diff / Math.Max(removedEntry.Data.Length, addedEntry.Data.Length);
-                    if (ratio < options.Value.RenameThreshold)
-                    {
-                        continue;
-                    }
-                }
-
-                // If any of the entries is not text, skip levenshtein distance calculation
-                if (!removedEntry.IsText || !addedEntry.IsText)
+                var diff = (float)Math.Abs(removedEntry.Data.Length - addedEntry.Data.Length);
+                var ratio = 1f - diff / Math.Max(removedEntry.Data.Length, addedEntry.Data.Length);
+                if (ratio < options.Value.RenameThreshold)
                 {
                     continue;
                 }
+            }
 
-                var similarity = LevenshteinDistance.ComputeSimilarity(removedEntry.Data, addedEntry.Data, options.Value.RenameThreshold);
-                if (similarity >= options.Value.RenameThreshold)
-                {
-                    var renameChange = new Change(ChangeType.Renamed, removedItem.OldPath, addedItem.NewPath, removedItem.Old, addedItem.New);
-                    result.Remove(removedItem);
-                    result.Remove(addedItem);
-                    result.Add(renameChange);
-                    addedItems.Remove(addedItem);
-                    break;
-                }
+            // If any of the entries is not text, skip levenshtein distance calculation
+            if (!removedEntry.IsText || !addedEntry.IsText)
+            {
+                continue;
+            }
+
+            var flowControl = EvaluateRenameSimilarity(options, result, addedItems, removedItem, addedItem, removedEntry, addedEntry);
+            if (!flowControl)
+            {
+                break;
             }
         }
+    }
+
+    private static bool EvaluateRenameSimilarity(IOptions<GitConnection.Options> options, List<Change> result, List<Change> addedItems, Change removedItem, Change addedItem, BlobEntry removedEntry, BlobEntry addedEntry)
+    {
+        var similarity = LevenshteinDistance.ComputeSimilarity(removedEntry.Data, addedEntry.Data, options.Value.RenameThreshold);
+        if (similarity >= options.Value.RenameThreshold)
+        {
+            var renameChange = new Change(ChangeType.Renamed, removedItem.OldPath, addedItem.NewPath, removedItem.Old, addedItem.New);
+            result.Remove(removedItem);
+            result.Remove(addedItem);
+            result.Add(renameChange);
+            addedItems.Remove(addedItem);
+            return false;
+        }
+
+        return true;
     }
 }
 
