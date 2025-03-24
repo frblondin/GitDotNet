@@ -63,9 +63,11 @@ public static class ServiceConfiguration
             new FileOffsetStreamReader(path,
                                        sp.GetRequiredService<IFileSystem>().FileInfo.New(path).Length))
         .AddScoped<IndexReaderFactory>(sp => (path, entryProvider) =>
-            IndexReader.Load(sp.GetRequiredService<FileOffsetStreamReaderFactory>().Invoke(path), entryProvider))
-        .AddScoped<IndexFactory>(sp => (repositoryPath, entryProvider) =>
-            new(repositoryPath, entryProvider, sp.GetRequiredService<IndexReaderFactory>(), sp.GetRequiredService<IFileSystem>()))
+            new(path,
+                entryProvider,
+                sp.GetRequiredService<IFileSystem>()))
+        .AddScoped<IndexFactory>(sp => (repositoryPath, entryProvider, locker) =>
+            new(repositoryPath, entryProvider, locker, sp.GetRequiredService<IndexReaderFactory>(), sp.GetRequiredService<IFileSystem>()))
         .AddScoped<ObjectsFactory>(sp => (path, useReadCommitGraph) =>
             new ObjectResolver(
                 path,

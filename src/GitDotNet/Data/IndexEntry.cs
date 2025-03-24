@@ -43,9 +43,10 @@ public record IndexEntry
     /// <summary>Gets the path of the file.</summary>
     public string Path { get; }
 
-    /// <summary>Gets the associated Git entry.</summary>
-    /// <returns>The associated Git entry.</returns>
-    public async Task<Entry> GetEntryAsync() => _entry ??= await _objectResolver.GetAsync<Entry>(Id);
+    /// <summary>Retrieves an entry asynchronously./// </summary>
+    /// <typeparam name="TEntry">Represents the type of entry being retrieved.</typeparam>
+    /// <returns>Returns the entry of the specified type.</returns>
+    public async Task<TEntry> GetEntryAsync<TEntry>() where TEntry : Entry => (TEntry)(_entry ??= await _objectResolver.GetAsync<TEntry>(Id));
 
     /// <summary>Prints the members of the <see cref="IndexEntry"/> to the provided <see cref="StringBuilder"/>.</summary>
     /// <param name="builder">The <see cref="StringBuilder"/> to append the member information to.</param>
