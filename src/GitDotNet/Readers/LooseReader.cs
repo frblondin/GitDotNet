@@ -9,7 +9,7 @@ internal delegate LooseReader LooseReaderFactory(string path);
 
 internal class LooseReader(string path, IFileSystem fileSystem)
 {
-    private const int HeaderMaxLength = 5;
+    private const int HeaderMaxLength = 10;
     private const int SizeMaxLength = 64;
     private const byte SpaceChar = 0x20;
     private static readonly byte[] _commitHeader = Encoding.ASCII.GetBytes("commit");
@@ -51,9 +51,8 @@ internal class LooseReader(string path, IFileSystem fileSystem)
         return new ZLibStream(stream, CompressionMode.Decompress);
     }
 
-    private static EntryType GetType(ZLibStream zlibStream, ref int position)
-    {
-        return ReadUntilStopChar(zlibStream, SpaceChar, HeaderMaxLength, (buffer, length) =>
+    private static EntryType GetType(ZLibStream zlibStream, ref int position) =>
+        ReadUntilStopChar(zlibStream, SpaceChar, HeaderMaxLength, (buffer, length) =>
         {
             if (AreBuffersEqual(buffer, _commitHeader, length))
                 return EntryType.Commit;
@@ -66,17 +65,12 @@ internal class LooseReader(string path, IFileSystem fileSystem)
 
             throw new InvalidOperationException("Unknown object type.");
         }, ref position);
-    }
 
     private static int GetLength(ZLibStream stream, ref int position) =>
         ReadUntilStopChar(stream, 0, SizeMaxLength, (buffer, length) =>
         {
-            const byte ZeroByte = 48; // ASCII '0'
-            var exponent = 0;
-            return buffer
-                .Take(length)
-                .Reverse()
-                .Aggregate(0, (res, b) => res + (b - ZeroByte) * (int)Math.Pow(10, exponent++));
+            var lengthString = Encoding.ASCII.GetString(buffer, 0, length);
+            return int.Parse(lengthString);
         }, ref position);
 
     protected string GetObjectPath(IFileSystem fileSystem, string hexString)
@@ -125,8 +119,9 @@ internal class LooseReader(string path, IFileSystem fileSystem)
         try
         {
             var bytesRead = 0;
-            while (bytesRead < maxLength)
+            while (true)
             {
+                ArgumentOutOfRangeException.ThrowIfGreaterThan(bytesRead, maxLength);
                 var b = stream.ReadNonEosByteOrThrow();
                 position++;
                 if (b == stopChar)

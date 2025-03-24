@@ -7,7 +7,7 @@ namespace GitDotNet;
 internal delegate RepositoryInfo RepositoryInfoFactory(string path);
 
 /// <summary>Provides high level information about this repository.</summary>
-public class RepositoryInfo
+public class RepositoryInfo : IRepositoryInfo
 {
     private readonly Lazy<string> _path;
     private readonly Lazy<ConfigReader> _config;
@@ -35,4 +35,16 @@ public class RepositoryInfo
     /// <param name="fullPath">The full path of file or directory.</param>
     public GitPath GetRepositoryPath(string fullPath) =>
         new(fullPath.Replace('\\', '/').Replace(RootFilePath.Replace('\\', '/'), "").Trim('/'));
+}
+
+/// <summary>
+/// Defines an interface for repository information, providing properties for the repository's path and root file path.
+/// </summary>
+public interface IRepositoryInfo
+{
+    /// <summary>Gets the canonicalized absolute path of the repository.</summary>
+    string Path { get; }
+
+    /// <summary>Gets the root path of the git repository containing files.</summary>
+    string RootFilePath { get; }
 }

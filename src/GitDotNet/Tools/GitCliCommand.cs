@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.Diagnostics;
 
 namespace GitDotNet.Tools;
@@ -26,16 +27,18 @@ public class GitCliCommand
     /// Handler that will be invoked each time an application writes a line to its
     /// redirected <see cref="Process.StandardOutput"/> stream.
     /// </param>
+    /// <param name="updateEnvironmentVariables">An action that updates the environment variables before the command is executed.</param>
     /// <returns>The command exit status.</returns>
     public static int Execute(string repository,
                               string arguments,
                               Stream? inputStream = null,
                               bool throwOnError = true,
-                              DataReceivedEventHandler? outputDataReceived = null)
+                              DataReceivedEventHandler? outputDataReceived = null,
+                              Action<StringDictionary>? updateEnvironmentVariables = null)
     {
         ThrowIfGitNotInstalled();
 
-        return ExecuteNoCheck(repository, arguments, inputStream, throwOnError, outputDataReceived);
+        return ExecuteNoCheck(repository, arguments, inputStream, throwOnError, outputDataReceived, updateEnvironmentVariables);
     }
 
     /// <summary>Gets a value indicating whether Git CLI is accessible.</summary>
@@ -53,9 +56,10 @@ public class GitCliCommand
                                       string arguments,
                                       Stream? inputStream = null,
                                       bool throwOnError = true,
-                                      DataReceivedEventHandler? outputDataReceived = null)
+                                      DataReceivedEventHandler? outputDataReceived = null,
+                                      Action<StringDictionary>? updateEnvironmentVariables = null)
     {
-        var process = CreateProcess(repository, arguments, outputDataReceived);
+        var process = CreateProcess(repository, arguments, outputDataReceived, updateEnvironmentVariables);
         process.Start();
         if (process.StartInfo.RedirectStandardOutput)
         {
@@ -77,7 +81,7 @@ public class GitCliCommand
         return process.ExitCode;
     }
 
-    private static Process CreateProcess(string repository, string arguments, DataReceivedEventHandler? outputDataReceived)
+    private static Process CreateProcess(string repository, string arguments, DataReceivedEventHandler? outputDataReceived, Action<StringDictionary>? updateEnvironmentVariables)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -90,6 +94,7 @@ public class GitCliCommand
             RedirectStandardError = true,
             RedirectStandardOutput = outputDataReceived is not null,
         };
+        updateEnvironmentVariables?.Invoke(startInfo.EnvironmentVariables);
         var process = new Process
         {
             StartInfo = startInfo,

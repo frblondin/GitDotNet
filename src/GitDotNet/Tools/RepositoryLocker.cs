@@ -4,54 +4,72 @@ namespace GitDotNet.Tools;
 
 internal delegate IRepositoryLocker RepositoryLockerFactory(string path);
 
-internal class RepositoryLocker(string path, IFileSystem fileSystem) : IRepositoryLocker
+internal sealed class RepositoryLocker : IRepositoryLocker
 {
-    private readonly AsyncLocal<bool> _lockTaken = new();
-    private readonly string _lockFilePath = fileSystem.Path.Combine(path, "index.lock");
+    internal static RepositoryLocker Empty { get; } = new RepositoryLocker(string.Empty, new FileSystem());
 
-    public IDisposable GetLock()
+    private readonly IFileSystem _fileSystem;
+    private readonly string? _lockFilePath;
+    private bool _disposedValue;
+
+    public RepositoryLocker(string? path, IFileSystem fileSystem)
     {
-        // Allows reentrancy
-        if (_lockTaken.Value)
-        {
-            return Disposable.Empty;
-        }
+        _fileSystem = fileSystem;
+        _lockFilePath = path != null ? _fileSystem.Path.Combine(path, "index.lock") : null;
 
-        // Create the lock file
-        using (fileSystem.File.Create(_lockFilePath)) { }
-
-        _lockTaken.Value = true;
-        return new Disposable(() =>
-        {
-
-            _lockTaken.Value = false;
-            if (fileSystem.File.Exists(_lockFilePath))
-            {
-                fileSystem.File.Delete(_lockFilePath);
-                Console.WriteLine($"Lock released: {_lockFilePath}");
-            }
-        });
+        CreateLockFile();
     }
 
-    internal sealed class Disposable(Action Action) : IDisposable
+    private void CreateLockFile()
     {
-        internal static IDisposable Empty { get; } = new Disposable(() => { });
+        if (_lockFilePath == null) return;
+        using var lockFile = _fileSystem.File.Create(_lockFilePath);
+    }
 
-        private readonly Action _dispose = Action ?? throw new ArgumentNullException(nameof(Action));
-        private bool _disposed;
-
-        public void Dispose()
+    private void DeleteLockFile()
+    {
+        if (_lockFilePath != null && _fileSystem.File.Exists(_lockFilePath))
         {
-            if (!_disposed)
-            {
-                _disposed = true;
-                _dispose();
-            }
+            _fileSystem.File.Delete(_lockFilePath);
         }
+    }
+
+    public void ExecuteWithTemporaryLockRelease(Action action)
+    {
+        DeleteLockFile();
+
+        try
+        {
+            action();
+        }
+        finally
+        {
+            CreateLockFile();
+        }
+    }
+
+    private void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                DeleteLockFile();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }
 
-internal interface IRepositoryLocker
+internal interface IRepositoryLocker : IDisposable
 {
-    IDisposable GetLock();
+    void ExecuteWithTemporaryLockRelease(Action action);
 }

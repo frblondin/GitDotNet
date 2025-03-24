@@ -96,10 +96,8 @@ public record class CommitEntry : Entry
 
     private Content Parse()
     {
-        var index = Array.IndexOf(Data, (byte)0);
-
         // Read the commit content
-        var commitContent = Encoding.UTF8.GetString(Data, 0, index != -1 ? index : Data.Length);
+        var commitContent = Encoding.UTF8.GetString(Data);
         var lines = commitContent.AsSpan();
 
         string? tree = null, author = null, committer = null;
