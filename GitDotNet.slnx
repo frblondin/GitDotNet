@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitattributes" />
+    <File Path=".gitignore" />
+    <File Path="GitDotNet.png" />
+    <File Path="LICENSE" />
+    <File Path="nuget.config" />
+    <File Path="README.md" />
+    <File Path="src/Directory.Packages.props" />
+    <File Path="version.json" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="src/tests/GitDotNet.Indexing.LiteDb.Tests/GitDotNet.Indexing.LiteDb.Tests.csproj" />
+    <Project Path="src/tests/GitDotNet.Tests/GitDotNet.Tests.csproj" />
+  </Folder>
+  <Project Path="src/GitDotNet.Benchmark/GitDotNet.Benchmark.csproj" />
+  <Project Path="src/GitDotNet.Console/GitDotNet.Console.csproj" />
+  <Project Path="src/GitDotNet.Indexing.LiteDb/GitDotNet.Indexing.LiteDb.csproj" />
+  <Project Path="src/GitDotNet.Microsoft.Extensions.DependencyInjection/GitDotNet.Microsoft.Extensions.DependencyInjection.csproj" />
+  <Project Path="src/GitDotNet/GitDotNet.csproj" />
+</Solution>
