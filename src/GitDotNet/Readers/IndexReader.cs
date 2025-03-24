@@ -1,46 +1,29 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Immutable;
+using System.IO.Abstractions;
 using System.Text;
-using GitDotNet.Tools;
 
 namespace GitDotNet.Readers;
 
 internal delegate IndexReader IndexReaderFactory(string path, IObjectResolver objectResolver);
 
-internal class IndexReader(int version, IObjectResolver objectResolver, IFileOffsetStreamReader offsetStreamReader) : IDisposable
+internal class IndexReader(string path, IObjectResolver objectResolver, IFileSystem fileSystem)
 {
-    private bool _disposedValue;
-
-    /// <summary>Gets the version of the index file.</summary>
-    public int Version => version;
-
-    internal static IndexReader Load(IFileOffsetStreamReader offsetStreamReader, IObjectResolver objectResolver)
+    /// <summary>Gets the entries from the index file asynchronously.</summary>
+    /// <returns>A task that represents the asynchronous operation. The task result contains a list of <see cref="IndexEntry"/> instances.</returns>
+    public async Task<IImmutableList<IndexEntry>> GetEntriesAsync()
     {
+        if (!fileSystem.File.Exists(path)) return [];
+
         var fourByteBuffer = ArrayPool<byte>.Shared.Rent(4);
+        using var stream = fileSystem.File.OpenReadAsynchronous(path);
         try
         {
-            using var stream = offsetStreamReader.OpenRead(0L);
             stream.ReadExactly(fourByteBuffer.AsSpan(0, 4));
             var version = ReadVersion(stream, fourByteBuffer);
 
-            return new IndexReader(version, objectResolver, offsetStreamReader);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(fourByteBuffer);
-        }
-    }
-
-    /// <summary>Gets the entries from the index file asynchronously.</summary>
-    /// <returns>A task that represents the asynchronous operation. The task result contains a list of <see cref="IndexEntry"/> instances.</returns>
-    public async Task<IList<IndexEntry>> GetEntriesAsync()
-    {
-        var fourByteBuffer = ArrayPool<byte>.Shared.Rent(4);
-        using var stream = offsetStreamReader.OpenRead(8);
-        try
-        {
-            stream.Seek(8, SeekOrigin.Begin);
+            stream.Seek(8L, SeekOrigin.Begin);
             await stream.ReadExactlyAsync(fourByteBuffer.AsMemory(0, 4));
             var entryCount = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
@@ -149,25 +132,5 @@ internal class IndexReader(int version, IObjectResolver objectResolver, IFileOff
         dateTimeOffset = dateTimeOffset.AddTicks(ctimeNano / 100);
         // Convert to DateTime
         return dateTimeOffset.UtcDateTime;
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!_disposedValue)
-        {
-            if (disposing)
-            {
-                offsetStreamReader.Dispose();
-            }
-
-            _disposedValue = true;
-        }
-    }
-
-    public void Dispose()
-    {
-        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-        Dispose(disposing: true);
-        GC.SuppressFinalize(this);
     }
 }
