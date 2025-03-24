@@ -7,6 +7,12 @@ public record class FileMode(int Mode)
     /// <param name="mode">The file mode as an integer.</param>
     public FileMode(string mode) : this(Convert.ToInt32(mode, 8)) { }
 
+    /// <summary>Creates a default blob mode.</summary>
+    public static FileMode DefaultBlob { get; } = new((int)ObjectType.RegularFile);
+
+    /// <summary>Creates an executable blob mode.</summary>
+    public static FileMode ExecutableBlob { get; } = new((int)ObjectType.ExecutableBlob);
+
     /// <summary>Gets the type of the object based on the file mode.</summary>
     public ObjectType Type => (ObjectType)Mode;
 

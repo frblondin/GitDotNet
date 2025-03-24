@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Text;
 using FakeItEasy;
 using FluentAssertions;
+using FluentAssertions.Common;
 using FluentAssertions.Execution;
 using GitDotNet.Readers;
 using GitDotNet.Tests.Helpers;
@@ -159,6 +160,71 @@ public class GitConnectionTests
         }
     }
 
+    [Test]
+    public async Task StageFiles()
+    {
+        // Arrange
+        var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        TestUtils.ForceDeleteDirectory(folder);
+        GitConnection.Create(folder);
+        using (var writer = File.CreateText(Path.Combine(folder, "file.txt")))
+        {
+            writer.Write("foo");
+        }
+        var sut = CreateProvider().Invoke(folder);
+
+        // Act
+        sut.Index.AddEntries("*");
+
+        // Assert
+        using (new AssertionScope())
+        {
+            var entries = await sut.Index.GetEntriesAsync();
+            entries.Should().HaveCount(1);
+            entries[0].Path.Should().Be("file.txt");
+            entries[0].Type.Should().Be(IndexEntryType.Regular);
+            entries[0].UnixPermissions.Should().Be(420);
+            var blob = await entries[0].GetEntryAsync<BlobEntry>();
+            blob.GetText().Should().Be("foo");
+        }
+    }
+
+    [Test]
+    public async Task AddCommitThroughFileSystem()
+    {
+        // Arrange
+        var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        TestUtils.ForceDeleteDirectory(folder);
+        GitConnection.Create(folder);
+        using (var writer = File.CreateText(Path.Combine(folder, "file.txt")))
+        {
+            writer.Write("foo");
+        }
+        var sut = CreateProvider().Invoke(folder);
+        sut.Index.AddEntries("*");
+
+        // Act
+        var commit = await sut.CommitAsync("foo",
+                                           new Signature("test", "test@corporate.com", DateTimeOffset.Now),
+                                           new Signature("JC Van Damme", "test@corporate.com", DateTimeOffset.Now));
+
+        // Assert
+        using (new AssertionScope())
+        {
+            commit.Message.Should().Be("foo");
+            commit.Author!.Name.Should().Be("test");
+            commit.Author!.Email.Should().Be("test@corporate.com");
+            commit.Committer!.Name.Should().Be("JC Van Damme");
+            commit.Committer!.Email.Should().Be("test@corporate.com");
+            var diff = await sut.CompareAsync(null, commit.Id.ToString());
+            diff.Should().HaveCount(1);
+            diff[0].Type.Should().Be(ChangeType.Added);
+            diff[0].NewPath!.ToString().Should().Be("file.txt");
+            var newBlob = await diff[0].New!.GetEntryAsync<BlobEntry>();
+            newBlob.GetText().Should().Be("foo");
+        }
+    }
+
     private static async Task<(GitConnection sut, CommitEntry tip, CommitEntry commit)> CreateCommitWithTransformation(
         Func<ITransformationComposer, ITransformationComposer> transformations, bool updateBranch = true)
     {
@@ -174,7 +240,7 @@ public class GitConnectionTests
                                            sut.CreateCommit("Commit message",
                                                             new("test", "test@corporate.com", DateTimeOffset.Now),
                                                             new("test", "test@corporate.com", DateTimeOffset.Now)),
-                                           updateBranch);
+                                           new(UpdateBranch: updateBranch));
         return (sut, tip, commit);
     }
 
@@ -341,9 +407,9 @@ public class GitConnectionTests
         commit.Id.ToString().Should().Be("a28d9681fdf40631632a42b303be274e3869d5d5");
     }
 
-    private static GitConnectionProvider CreateProvider() => CreateProvider(out var _);
+    internal static GitConnectionProvider CreateProvider() => CreateProvider(out var _);
 
-    public static GitConnectionProvider CreateProvider(out ServiceProvider provider)
+    internal static GitConnectionProvider CreateProvider(out ServiceProvider provider)
     {
         var collection = new ServiceCollection()
             .AddMemoryCache()

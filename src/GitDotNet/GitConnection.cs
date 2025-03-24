@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
+using System.Text;
 using System.Text.RegularExpressions;
 using GitDotNet.Readers;
 using GitDotNet.Tools;
@@ -18,7 +19,7 @@ public partial class GitConnection : IDisposable
     private readonly Lazy<IObjectResolver> _objects;
     private readonly BranchRefReader _branchRefReader;
     private readonly Lazy<Index> _index;
-    private readonly IDisposable _lock;
+    private readonly IRepositoryLocker _lock;
     private readonly ITreeComparer _comparer;
     private readonly TransformationComposerFactory _transformationComposerFactory;
     private readonly IFileSystem _fileSystem;
@@ -41,8 +42,8 @@ public partial class GitConnection : IDisposable
         _transformationComposerFactory = transformationComposerFactory;
         _objects = new(() => objectsFactory(Info.Path, Info.Config.UseCommitGraph));
         _branchRefReader = branchRefReaderFactory(this);
-        _index = new(() => indexFactory(Info.Path, Objects));
-        _lock = repositoryLockFactory(Info.Path).GetLock();
+        _lock = repositoryLockFactory(Info.Path);
+        _index = new(() => indexFactory(Info, Objects, _lock));
         _fileSystem = fileSystem;
     }
 
@@ -136,7 +137,7 @@ public partial class GitConnection : IDisposable
     /// <param name="old">The old <see cref="TreeEntry"/> instance.</param>
     /// <param name="new">The new <see cref="TreeEntry"/> instance.</param>
     /// <returns>A list of changes between the two <see cref="TreeEntry"/> instances.</returns>
-    public virtual async Task<IList<Change>> CompareAsync(TreeEntry old, TreeEntry @new) =>
+    public virtual async Task<IList<Change>> CompareAsync(TreeEntry? old, TreeEntry @new) =>
         await _comparer.CompareAsync(old, @new);
 
     /// <summary>Compares two <see cref="CommitEntry"/> instances by comparing their associated tree entries.</summary>
@@ -146,9 +147,11 @@ public partial class GitConnection : IDisposable
     /// <param name="unified">Generate diffs with n lines of context.</param>
     /// <param name="indentedHunkStart">The regular expression to match the start of an indented hunk.</param>
     /// <returns></returns>
-    public virtual async Task<IList<Change>> CompareAsync(CommitEntry old, CommitEntry @new, Stream? patch = null, int unified = GitPatchCreator.DefaultUnified, Regex? indentedHunkStart = null)
+    public virtual async Task<IList<Change>> CompareAsync(CommitEntry? old, CommitEntry @new, Stream? patch = null, int unified = GitPatchCreator.DefaultUnified, Regex? indentedHunkStart = null)
     {
-        var result = await CompareAsync(await old.GetRootTreeAsync(), await @new.GetRootTreeAsync());
+        var oldTree = old != null ? await old.GetRootTreeAsync() : null;
+        var newTree = await @new.GetRootTreeAsync();
+        var result = await CompareAsync(oldTree, newTree);
         if (patch is not null)
         {
             var patchCreator = new GitPatchCreator(unified, indentedHunkStart);
@@ -163,42 +166,12 @@ public partial class GitConnection : IDisposable
     /// <param name="patch">The stream to write the patch to.</param>
     /// <param name="unified">Generate diffs with n lines of context.</param>
     /// <returns></returns>
-    public virtual async Task<IList<Change>> CompareAsync(string old, string @new, Stream? patch = null, int unified = GitPatchCreator.DefaultUnified)
+    public virtual async Task<IList<Change>> CompareAsync(string? old, string @new, Stream? patch = null, int unified = GitPatchCreator.DefaultUnified)
     {
-        var oldCommit = await GetCommittishAsync(old);
+        var oldCommit = old != null ? await GetCommittishAsync(old) : null;
         var newCommit = await GetCommittishAsync(@new);
         return await CompareAsync(oldCommit, newCommit, patch, unified);
     }
-
-    /// <summary>Commits the changes in the transformation composer to the repository.</summary>
-    /// <param name="branchName">The branch name to commit to.</param>
-    /// <param name="transformations">The transformations to apply to the repository.</param>
-    /// <param name="commit">The commit entry to commit.</param>
-    /// <param name="updateBranch">true to update the branch reference; otherwise, false.</param>
-    public async Task<CommitEntry> CommitAsync(string branchName, Func<ITransformationComposer, ITransformationComposer> transformations, CommitEntry commit, bool updateBranch = true)
-    {
-        var tip = Branches.TryGet(branchName, out var branch) ? await branch.GetTipAsync() : null;
-        var canonicalName = Reference.LooksLikeLocalBranch(branchName) ? branchName : $"{Reference.LocalBranchPrefix}{branchName}";
-        var commitWithParent = commit with { Parents = tip is null ? [] : [tip] };
-
-        var composer = _transformationComposerFactory(Info.Path);
-        transformations(composer);
-
-        var hash = await composer.CommitAsync(canonicalName, commitWithParent, updateBranch);
-        (Objects as IObjectResolverInternal)?.ReinitializePacks();
-        return await Objects.GetAsync<CommitEntry>(hash);
-    }
-
-    /// <summary>Creates a new in-memory commit entry before it gets committed to repository.</summary>
-    /// <param name="message">The commit message.</param>
-    /// <param name="author">The author of the commit.</param>
-    /// <param name="committer">The committer of the commit.</param>
-    /// <returns>The new commit entry.</returns>
-    public CommitEntry CreateCommit(string message, Signature? author = null, Signature? committer = null) =>
-        new(HashId.Empty, [], Objects)
-        {
-            _content = new(new CommitEntry.Content("", author ?? Info.Config.CreateSignature(), committer ?? Info.Config.CreateSignature(), [], message))
-        };
 
     /// <summary>Determines whether the specified path is a valid Git repository.</summary>
     /// <param name="path">The path to the repository.</param>
@@ -224,7 +197,6 @@ public partial class GitConnection : IDisposable
             if (disposing)
             {
                 if (_objects.IsValueCreated) _objects.Value.Dispose();
-                if (_index.IsValueCreated) _index.Value.Dispose();
             }
             _lock.Dispose();
 

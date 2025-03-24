@@ -97,6 +97,10 @@ public sealed class GitPath : IEquatable<GitPath>, IComparable<GitPath>
     [ExcludeFromCodeCoverage]
     public static bool operator >=(GitPath? left, GitPath? right) => left is not null && right is not null && left.CompareTo(right) >= 0;
 
+    /// <summary>Converts a string to a <see cref="GitPath"/>.</summary>
+    /// <param name="path">The string path.</param>
+    public static implicit operator GitPath(string path) => new(path);
+
     /// <inheritdoc/>
     public override string ToString() => _pathString ??= string.Join('/', _pathChunks);
 

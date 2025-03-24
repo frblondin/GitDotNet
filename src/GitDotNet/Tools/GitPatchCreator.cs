@@ -9,7 +9,7 @@ internal partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnif
 {
     internal const int DefaultUnified = 3;
 
-    public async Task CreatePatchAsync(Stream stream, CommitEntry start, CommitEntry end, IList<Change> changes)
+    public async Task CreatePatchAsync(Stream stream, CommitEntry? start, CommitEntry end, IList<Change> changes)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(unified, 2);
 
@@ -21,17 +21,20 @@ internal partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnif
         await GetHeaderAsync(writer, start, end);
         GetDiffStat(writer, changes);
 
-        var indexLine = $"index {start.Id.ToString()[..7]}..{end.Id.ToString()[..7]}";
+        var indexLine = $"index {start?.Id.ToString()[..7] ?? "null"}..{end.Id.ToString()[..7]}";
         foreach (var change in changes)
         {
             await CreatePatchAsync(writer, change, indexLine);
         }
     }
 
-    private static async Task GetHeaderAsync(StreamWriter writer, CommitEntry start, CommitEntry end)
+    private static async Task GetHeaderAsync(StreamWriter writer, CommitEntry? start, CommitEntry end)
     {
         var author = end.Author ?? throw new InvalidOperationException("Author is required.");
-        await writer.WriteLineAsync($"From {start.Id} {author.Timestamp:ddd MMM dd HH:mm:ss yyyy}");
+        if (start != null)
+        {
+            await writer.WriteLineAsync($"From {start.Id} {author.Timestamp:ddd MMM dd HH:mm:ss yyyy}");
+        }
         await writer.WriteLineAsync($"From: {author.Name} <{author.Email}>");
         await writer.WriteLineAsync($"Date: {author.Timestamp:ddd, dd MMM yyyy HH:mm:ss +0000}");
         await writer.WriteLineAsync($"Subject: [PATCH] {end.Message}");

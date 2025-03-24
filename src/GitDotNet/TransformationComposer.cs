@@ -31,7 +31,7 @@ internal class TransformationComposer(string repositoryPath, FastInsertWriterFac
         return this;
     }
 
-    public async Task<HashId> CommitAsync(string branch, CommitEntry commit, bool updateBranch)
+    public async Task<HashId> CommitAsync(string branch, CommitEntry commit, CommitOptions? options)
     {
         CheckFullReferenceName(branch);
 
@@ -47,7 +47,7 @@ internal class TransformationComposer(string repositoryPath, FastInsertWriterFac
                 throw new InvalidOperationException("Could not locate commit id in fast-import mark file.");
             var result = line[linePrefix.Length..].Trim();
 
-            if (!updateBranch)
+            if (!(options?.UpdateBranch ?? true))
             {
                 await RevertToPreviousCommitAsync(repositoryPath, branch, commit);
             }
@@ -97,7 +97,7 @@ internal class TransformationComposer(string repositoryPath, FastInsertWriterFac
 
 internal interface ITransformationComposerInternal : ITransformationComposer
 {
-    Task<HashId> CommitAsync(string branch, CommitEntry commit, bool updateBranch);
+    Task<HashId> CommitAsync(string branch, CommitEntry commit, CommitOptions? options);
 }
 
 /// <summary>Provides methods to compose transformations on a Git repository.</summary>

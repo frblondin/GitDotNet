@@ -39,8 +39,7 @@ internal static class Fakes
 
     private static MethodInfo _taskFromResultMethod = typeof(Task).GetMethod(nameof(Task.FromResult))!;
 
-    internal static IRepositoryLocker EmptyLocker { get; } = A.Fake<IRepositoryLocker>(o => o.ConfigureFake(
-        l => A.CallTo(() => l.GetLock()).Returns(RepositoryLocker.Disposable.Empty)));
+    internal static IRepositoryLocker EmptyLocker { get; } = A.Fake<IRepositoryLocker>();
 
     internal static RepositoryLockerFactory EmptyLockerFactory { get; } = _ => EmptyLocker;
 }
