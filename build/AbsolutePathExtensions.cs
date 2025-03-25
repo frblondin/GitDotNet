@@ -7,8 +7,8 @@ using System.Threading.Tasks;
 
 internal static class AbsolutePathExtensions
 {
-    internal static string ToGitPath(this AbsolutePath path, AbsolutePath basePath) =>
-        path.Parent.ToString()
+    internal static string ToGitPath(this string path, AbsolutePath basePath) =>
+        path
         .Replace(basePath.ToString(), "")
         .Replace('\\', '/')
         .TrimStart('/');

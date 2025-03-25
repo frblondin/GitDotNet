@@ -1,8 +1,11 @@
+using Microsoft.VisualStudio.SolutionPersistence.Model;
+using Microsoft.VisualStudio.SolutionPersistence.Serializer;
 using Nuke.Common;
 using Nuke.Common.ChangeLog;
 using Nuke.Common.CI;
 using Nuke.Common.CI.AzurePipelines;
 using Nuke.Common.CI.GitHubActions;
+using Nuke.Common.CI.GitHubActions.Configuration;
 using Nuke.Common.Execution;
 using Nuke.Common.Git;
 using Nuke.Common.IO;
@@ -15,22 +18,25 @@ using Nuke.Common.Tools.GitVersion;
 using Nuke.Common.Tools.NerdbankGitVersioning;
 using Nuke.Common.Tools.ReportGenerator;
 using Nuke.Common.Tools.SonarScanner;
+using Nuke.Common.Utilities;
 using Nuke.Common.Utilities.Collections;
 using Octokit;
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using Nuke.Common.CI.GitHubActions.Configuration;
+using YamlDotNet.Serialization;
+using static DotNetCollectTasks;
 using static Nuke.Common.EnvironmentInfo;
 using static Nuke.Common.IO.PathConstruction;
 using static Nuke.Common.Tooling.ProcessTasks;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
 using static Nuke.Common.Tools.ReportGenerator.ReportGeneratorTasks;
 using static System.Net.WebRequestMethods;
-using static DotNetCollectTasks;
 using Project = Nuke.Common.ProjectModel.Project;
 
 [ShutdownDotNetAfterServerBuild]
@@ -53,7 +59,7 @@ using Project = Nuke.Common.ProjectModel.Project;
     
     InvokedTargets = [nameof(Pack)],
     ImportSecrets = ["GITHUB_TOKEN", "SONAR_TOKEN", nameof(NuGetApiKey)],
-    WritePermissions = [GitHubActionsPermissions.Packages],
+    WritePermissions = [GitHubActionsPermissions.Packages, GitHubActionsPermissions.Contents],
     FetchDepth = 0)]
 class Build : NukeBuild
 {
@@ -205,7 +211,7 @@ class Build : NukeBuild
         .DependsOn(EndSonarqube)
         .Produces(NugetDirectory / ArtifactsType)
         .Triggers(PublishToGithub, PublishToNuGet, CreateRelease)
-        .Executes(() =>
+        .Executes(async () =>
         {
             var anyTag = GitChangeLogTasks.AnyTag();
             var modifiedFilesSinceLastTag = anyTag ? GitChangeLogTasks.ChangedFilesSinceLastTag() : [];
@@ -215,25 +221,50 @@ class Build : NukeBuild
                  where match.Success
                  select match.Groups[1].Value).ToList() : [];
 
-            Solution.AllProjects
-                .Where(p => p.GetProperty<string>("PackageType") == "Dependency")
-                .Where(anyTag ? HasProjectBeenModifiedSinceLastTag : _ => true)
-                .ForEach(project =>
-                    DotNetPack(s => s
-                        .SetProject(project)
-                        .SetConfiguration(Configuration)
-                        .SetVersion(GitVersion.NuGetPackageVersion)
-                        .EnableNoBuild()
-                        .EnableNoRestore()
-                        .SetOutputDirectory(NugetDirectory)));
-
-            bool HasProjectBeenModifiedSinceLastTag(Project project)
+            var serializer = SolutionSerializers.GetSerializerByMoniker(Solution.FileName);
+            var slnx = await serializer.OpenAsync(Solution.Path, CancellationToken.None);
+            foreach (var project in slnx.SolutionProjects
+                .Where(p => CheckPackageType(p, "Dependency"))
+                .Where(anyTag ? HasProjectBeenModifiedSinceLastTag : _ => true))
             {
-                var gitPath = project.Path.ToGitPath(RootDirectory);
-                var projectContent = System.IO.File.ReadAllText(project.Path);
+                DotNetPack(s => s
+                    .SetProject(GetProjectFilePath(project))
+                    .SetConfiguration(Configuration)
+                    .SetVersion(GitVersion.NuGetPackageVersion)
+                    .EnableNoBuild()
+                    .EnableNoRestore()
+                    .SetOutputDirectory(NugetDirectory));
+            }
+            // Nuke doesn't support yet slnx, replace loop above with the below
+            //Solution.AllProjects
+            //    .Where(p => p.GetProperty<string>("PackageType") == "Dependency")
+            //    .Where(anyTag ? HasProjectBeenModifiedSinceLastTag : _ => true)
+            //    .ForEach(project =>
+            //        DotNetPack(s => s
+            //            .SetProject(project)
+            //            .SetConfiguration(Configuration)
+            //            .SetVersion(GitVersion.NuGetPackageVersion)
+            //            .EnableNoBuild()
+            //            .EnableNoRestore()
+            //            .SetOutputDirectory(NugetDirectory)));
+
+            bool HasProjectBeenModifiedSinceLastTag(SolutionProjectModel project)
+            {
+                var path = GetProjectFilePath(project);
+                var gitPath = path.ToGitPath(RootDirectory);
+                var projectContent = System.IO.File.ReadAllText(path);
                 return modifiedFilesSinceLastTag.Any(f => f.StartsWith(gitPath)) ||
                        modifiedPackages.Any(package => projectContent.Contains(package));
             }
+
+            bool CheckPackageType(SolutionProjectModel project, string packageType)
+            {
+                var doc = XDocument.Load(GetProjectFilePath(project));
+                var packageTypeElement = doc.Descendants("PackageType").FirstOrDefault();
+                return packageTypeElement != null && packageTypeElement.Value == packageType;
+            }
+
+            string GetProjectFilePath(SolutionProjectModel project) => Path.Combine(Path.GetDirectoryName(Solution.Path), project.FilePath);
         });
 
     Target PublishToGithub => _ => _

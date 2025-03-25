@@ -38,25 +38,25 @@ internal static class GitChangeLogTasks
 
     public static IEnumerable<string> CommitsSinceLastTag()
     {
-        var logStart = default(string);
+        var logCommits = "";
         try
         {
             var lastTag = GitTasks
                 .Git("describe --tags --abbrev=0")
                 .Select(x => x.Text)
                 .FirstOrDefault();
+            logCommits = $"{lastTag}..HEAD";
             Serilog.Log.Information("Found most recent tag '{LastTag}'", lastTag);
         }
         catch (Exception ex)
         {
-            Serilog.Log.Error(ex, "Couldn't find last tag.");
-            logStart = "HEAD~1";
+            Serilog.Log.Warning(ex, "Couldn't find last tag.");
         }
 
-        var result = logStart != null ? GitTasks
-            .Git($"log --pretty=format:%s {logStart}..HEAD")
+        var result = GitTasks
+            .Git($"log --pretty=format:%s {logCommits}")
             .Select(x => x.Text)
-            .ToList() : null;
+            .ToList();
         Serilog.Log.Information("Found {ModifiedFilesCount} changes since last tag", result?.Count);
         return result;
     }
