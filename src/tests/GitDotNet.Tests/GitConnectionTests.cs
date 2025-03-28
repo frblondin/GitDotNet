@@ -202,7 +202,7 @@ public class GitConnectionTests
         {
             var entries = await sut.Index.GetEntriesAsync();
             entries.Should().HaveCount(1);
-            entries[0].Path.Should().Be("file.txt");
+            entries[0].Path.ToString().Should().Be("file.txt");
             entries[0].Type.Should().Be(IndexEntryType.Regular);
             entries[0].UnixPermissions.Should().Be(420);
             var blob = await entries[0].GetEntryAsync<BlobEntry>();
@@ -328,7 +328,7 @@ public class GitConnectionTests
 
         // Act
         var root = await sut.Head.Tip.GetRootTreeAsync();
-        var entry = await root.GetPathAsync(new GitPath("bar.txt"));
+        var entry = await root.GetFromPathAsync(new GitPath("bar.txt"));
         var blob = await entry.GetEntryAsync<BlobEntry>();
         var commits = await blob.GetLogAsync(sut.Head, LogOptions.Default with { SortBy = LogTraversal.FirstParentOnly })
             .ToListAsync();
@@ -398,7 +398,7 @@ public class GitConnectionTests
         // Act
         var tip = sut.Head.Tip!;
         var root = await tip.GetRootTreeAsync();
-        var blob = await root.GetPathAsync("Applications/ss04fto6lzk5/ss04fto6lzk5.json");
+        var blob = await root.GetFromPathAsync("Applications/ss04fto6lzk5/ss04fto6lzk5.json");
 
         // Assert
         blob!.Name.Should().Be("ss04fto6lzk5.json");

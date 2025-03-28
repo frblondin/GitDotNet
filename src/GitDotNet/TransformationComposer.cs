@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Formats.Tar;
 using System.IO.Abstractions;
 using GitDotNet.Tools;
 using GitDotNet.Writers;
@@ -12,22 +11,22 @@ internal delegate ITransformationComposerInternal TransformationComposerFactory(
 internal class TransformationComposer(string repositoryPath, FastInsertWriterFactory FastInsertWriterFactory, IFileSystem fileSystem)
     : ITransformationComposerInternal
 {
-    internal Dictionary<string, (TransformationType ChangeType, Stream? Stream)> Changes { get; } = [];
+    internal Dictionary<GitPath, (TransformationType ChangeType, Stream? Stream, FileMode? FileMode)> Changes { get; } = [];
 
     public int Count => Changes.Count;
 
-    public ITransformationComposer AddOrUpdate(string path, byte[] data) =>
-        AddOrUpdate(path, new MemoryStream(data));
+    public ITransformationComposer AddOrUpdate(GitPath path, byte[] data, FileMode? fileMode = null) =>
+        AddOrUpdate(path, new MemoryStream(data), fileMode);
 
-    public ITransformationComposer AddOrUpdate(string path, Stream stream)
+    public ITransformationComposer AddOrUpdate(GitPath path, Stream stream, FileMode? fileMode = null)
     {
-        Changes[path] = (TransformationType.AddOrModified, stream);
+        Changes[path] = (TransformationType.AddOrModified, stream, fileMode);
         return this;
     }
 
-    public ITransformationComposer Remove(string path)
+    public ITransformationComposer Remove(GitPath path)
     {
-        Changes[path] = (TransformationType.Removed, default);
+        Changes[path] = (TransformationType.Removed, default, null);
         return this;
     }
 
@@ -109,18 +108,20 @@ public interface ITransformationComposer
     /// <summary>Adds or updates a file in the repository with the specified path and data.</summary>
     /// <param name="path">The path of the file to add or update.</param>
     /// <param name="data">The data to write to the file.</param>
+    /// <param name="fileMode">The file mode of a Git tree entry item.</param>
     /// <returns>The current instance of <see cref="ITransformationComposer"/>.</returns>
-    ITransformationComposer AddOrUpdate(string path, byte[] data);
+    ITransformationComposer AddOrUpdate(GitPath path, byte[] data, FileMode? fileMode = null);
 
     /// <summary>Adds or updates a file in the repository with the specified path and stream.</summary>
     /// <param name="path">The path of the file to add or update.</param>
     /// <param name="stream">The stream containing the data to write to the file.</param>
+    /// <param name="fileMode">The file mode of a Git tree entry item.</param>
     /// <returns>The current instance of <see cref="ITransformationComposer"/>.</returns>
-    ITransformationComposer AddOrUpdate(string path, Stream stream);
+    ITransformationComposer AddOrUpdate(GitPath path, Stream stream, FileMode? fileMode = null);
 
     /// <summary>Removes a file from the repository with the specified path.</summary>
     /// <remarks>Add '/' at the end of the path to indicate that folder and children should be removed.</remarks>
     /// <param name="path">The path of the file to remove.</param>
     /// <returns>The current instance of <see cref="ITransformationComposer"/>.</returns>
-    ITransformationComposer Remove(string path);
+    ITransformationComposer Remove(GitPath path);
 }

@@ -14,7 +14,7 @@ public class BlobLogCommitHistory(GitConnectionProvider factory) : BackgroundSer
         TreeEntryItem? entry = null;
         var root = await tip.GetRootTreeAsync();
         InputData("File path in repository", path =>
-            (entry = AsyncHelper.RunSync(async () => await root.GetPathAsync(new GitPath(path)))) != null);
+            (entry = AsyncHelper.RunSync(async () => await root.GetFromPathAsync(new GitPath(path)))) != null);
         var blob = await entry!.GetEntryAsync<BlobEntry>();
         await foreach (var commit in blob.GetLogAsync(
             connection.Head,
