@@ -59,6 +59,15 @@ public sealed class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>,
     /// <summary>Gets the tip commit of the branch.</summary>
     public async Task<CommitEntry> GetTipAsync() => await _tipProvider();
 
+    /// <summary>
+    /// Updates a reference in the Git repository to point to a new commit. This operation modifies the reference to the
+    /// specified commit ID.
+    /// </summary>
+    /// <param name="commit">The parameter represents the new commit that the reference will be updated to.</param>
+    [ExcludeFromCodeCoverage]
+    public void UpdateRef(CommitEntry commit) =>
+        GitCliCommand.Execute(Connection.Info.Path, $"git update-ref {CanonicalName} {commit.Id}");
+
     private Remote? GetRemote()
     {
         var name = (Connection.Info.Config
