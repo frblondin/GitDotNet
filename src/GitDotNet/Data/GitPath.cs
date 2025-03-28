@@ -1,9 +1,10 @@
+using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 
 namespace GitDotNet;
 
 /// <summary>Represents a Git path composed of multiple path chunks.</summary>
-public sealed class GitPath : IEquatable<GitPath>, IComparable<GitPath>
+public sealed class GitPath : IEquatable<GitPath>, IComparable<GitPath>, IEnumerable<string>
 {
     private readonly string[] _pathChunks;
     private string? _pathString;
@@ -114,6 +115,11 @@ public sealed class GitPath : IEquatable<GitPath>, IComparable<GitPath>
             first = false;
         }
     }
+
+    /// <inheritdoc/>
+    public IEnumerator<string> GetEnumerator() => _pathChunks.AsEnumerable().GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     /// <summary>Implicitly converts a string array to a <see cref="GitPath"/>.</summary>
     /// <param name="pathChunks">The array of path chunks.</param>

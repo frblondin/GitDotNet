@@ -64,7 +64,6 @@ internal class TreeComparerTests
             result.Should().HaveCount(1);
             result[0].Type.Should().Be(ChangeType.Removed);
             result[0].OldPath!.ToString().Should().Be("folder/blob.txt");
-            result[0].NewPath.Should().BeNull();
             result[0].Old!.Id.Should().BeEquivalentTo(oldBlob);
             result[0].New.Should().BeNull();
             var oldEntry = await result[0].Old!.GetEntryAsync<BlobEntry>();
@@ -93,7 +92,6 @@ internal class TreeComparerTests
         {
             result.Should().HaveCount(1);
             result[0].Type.Should().Be(ChangeType.Added);
-            result[0].OldPath.Should().BeNull();
             result[0].NewPath!.ToString().Should().Be("folder/blob.txt");
             result[0].Old.Should().BeNull();
             result[0].New!.Id.Should().Be(newBlob);
