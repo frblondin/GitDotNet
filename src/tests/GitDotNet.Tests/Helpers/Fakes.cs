@@ -11,7 +11,7 @@ internal static class Fakes
 {
     internal static RepositoryInfo CreateBareInfoProvider(string path, ConfigReaderFactory configReaderFactory, IFileSystem fileSystem) =>
         A.Fake<RepositoryInfo>(o => o
-            .WithArgumentsForConstructor(() => new(path, configReaderFactory, fileSystem, new GitCliCommand()))
+            .WithArgumentsForConstructor(() => new(path, configReaderFactory, NotImplemented<IRepositoryInfo, CurrentOperationReader>, fileSystem, new GitCliCommand()))
             .ConfigureFake(info =>
             {
                 A.CallTo(() => info.Path).Returns(path);
@@ -42,4 +42,6 @@ internal static class Fakes
     internal static IRepositoryLocker EmptyLocker { get; } = A.Fake<IRepositoryLocker>();
 
     internal static RepositoryLockerFactory EmptyLockerFactory { get; } = _ => EmptyLocker;
+
+    internal static TResult NotImplemented<TArg, TResult>(TArg _) => throw new NotImplementedException();
 }

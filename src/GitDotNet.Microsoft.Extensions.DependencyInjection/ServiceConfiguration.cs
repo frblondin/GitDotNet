@@ -39,6 +39,7 @@ public static class ServiceConfiguration
         .AddScoped<RepositoryInfoFactory>(sp => path =>
             new(path,
                 sp.GetRequiredService<ConfigReaderFactory>(),
+                sp.GetRequiredService<CurrentOperationReaderFactory>(),
                 sp.GetRequiredService<IFileSystem>(),
                 sp.GetRequiredService<GitCliCommand>()))
         .AddScoped<GitConnectionProvider>(sp => path =>
@@ -62,6 +63,7 @@ public static class ServiceConfiguration
         .AddScoped<FileOffsetStreamReaderFactory>(sp => path =>
             new FileOffsetStreamReader(path,
                                        sp.GetRequiredService<IFileSystem>().FileInfo.New(path).Length))
+        .AddScoped<CurrentOperationReaderFactory>(sp => info => new(info))
         .AddScoped<IndexReaderFactory>(sp => (path, entryProvider) =>
             new(path,
                 entryProvider,
