@@ -47,6 +47,27 @@ public class GitConnectionTests
     }
 
     [Test]
+    public async Task Clone()
+    {
+        // Arrange
+        var source = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteRepositoryWithRename), source, overwriteFiles: true);
+        var destination = Path.Combine(TestContext.CurrentContext.WorkDirectory, $"{TestContext.CurrentContext.Test.Name}_dest");
+        TestUtils.ForceDeleteDirectory(destination);
+
+        // Act
+        GitConnection.Clone(destination, source, new(IsBare: true));
+        using var sut = CreateProvider().Invoke(destination);
+
+        // Assert
+        using (new AssertionScope())
+        {
+            sut.Info.Config.IsBare.Should().BeTrue();
+            sut.Head.Tip!.Id.ToString().Should().Be("b2cb7f24a9a18e72d359ae47fb15dde6b8559d51");
+        }
+    }
+
+    [Test]
     public async Task DiffLastTwoCommits()
     {
         // Arrange

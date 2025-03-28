@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
-using System.Text;
 using System.Text.RegularExpressions;
 using GitDotNet.Readers;
 using GitDotNet.Tools;
@@ -186,6 +185,22 @@ public partial class GitConnection : IDisposable
         Directory.CreateDirectory(path);
         var argument = isBare ? "--bare" : string.Empty;
         GitCliCommand.Execute(path, $"init {argument}");
+    }
+
+    /// <summary>
+    /// Creates a directory at the specified path and clones a repository into it. The cloning can be done as a bare
+    /// repository if specified.
+    /// </summary>
+    /// <param name="path">Specifies the location where the repository will be cloned.</param>
+    /// <param name="url">The (possibly remote) repository to clone from.</param>
+    /// <param name="options">Specifies additional options.</param>
+    public static void Clone(string path, string url, CloneOptions? options = null)
+    {
+        Directory.CreateDirectory(path);
+        var argument = options?.IsBare ?? false ? "--bare " : string.Empty;
+        argument += options?.BranchName != null ? $"--branch {options.BranchName} " : string.Empty;
+        argument += options?.RecurseSubmodules ?? false ? $"----recurse-submodules " : string.Empty;
+        GitCliCommand.Execute(path, $"clone {argument} {url} .");
     }
 
     /// <summary>Releases the resources used by the <see cref="GitConnection"/>.</summary>
