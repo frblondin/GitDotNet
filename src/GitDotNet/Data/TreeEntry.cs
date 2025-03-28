@@ -47,12 +47,15 @@ public record class TreeEntry : Entry
 
     /// <summary>Gets all blob entries in the tree.</summary>
     /// <returns>An enumerable of all blob entries in the tree.</returns>
-    public async Task<IEnumerable<(GitPath Path, TreeEntryItem BlobEntry)>> GetAllBlobEntriesAsync()
+    public async Task<IEnumerable<(GitPath Path, TreeEntryItem BlobEntry)>> GetAllBlobEntriesAsync(GitPath? basePath = null)
     {
         var result = new List<(GitPath Path, TreeEntryItem BlobEntry)>();
+        var stack = new Stack<string>(basePath ?? []);
         foreach (var child in Children)
         {
-            await child.GetAllBlobEntriesAsync(result, new Stack<string>([child.Name]));
+            stack.Push(child.Name);
+            await child.GetAllBlobEntriesAsync(result, stack);
+            stack.Pop();
         }
         return result.AsEnumerable();
     }
