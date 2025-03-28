@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
 using System.Text.RegularExpressions;
@@ -73,7 +72,8 @@ public partial class GitConnection : IDisposable
 
     /// <summary>Gets the list of remotes.</summary>
     public Remote.List Remotes => new(
-        Info.Config.GetNamedSections("remote").ToImmutableDictionary(b => b, b => new Remote(b, this)));
+        Info,
+        Info.Config.GetNamedSections("remote").ToDictionary(b => b, b => new Remote(b, Info)));
 
     /// <summary>Gets the list of local and remote branches.</summary>
     /// <returns>A list of branch names.</returns>
