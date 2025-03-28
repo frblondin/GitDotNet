@@ -227,7 +227,8 @@ public partial class GitConnection : IDisposable
         Dispose(disposing: false);
     }
 
-    void IDisposable.Dispose()
+    /// <inheritdoc/>
+    public void Dispose()
     {
         Dispose(disposing: true);
         GC.SuppressFinalize(this);
