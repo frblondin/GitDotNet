@@ -251,7 +251,7 @@ class Build : NukeBuild
             bool HasProjectBeenModifiedSinceLastTag(SolutionProjectModel project)
             {
                 var path = GetProjectFilePath(project);
-                var gitPath = path.ToGitPath(RootDirectory);
+                var gitPath = Path.GetDirectoryName(path).ToGitPath(RootDirectory);
                 var projectContent = System.IO.File.ReadAllText(path);
                 return modifiedFilesSinceLastTag.Any(f => f.StartsWith(gitPath)) ||
                        modifiedPackages.Any(package => projectContent.Contains(package));
