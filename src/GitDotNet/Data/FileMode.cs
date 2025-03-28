@@ -23,7 +23,7 @@ public record class FileMode(int Mode)
         ObjectType.ExecutableBlob => EntryType.Blob,
         ObjectType.Symlink => EntryType.Blob,
         ObjectType.Tree => EntryType.Tree,
-        ObjectType.Gitlink => EntryType.Tree,
+        ObjectType.GitLink => EntryType.Tree,
         _ => throw new InvalidOperationException("Invalid object type.")
     };
 
@@ -47,5 +47,5 @@ public enum ObjectType
     Tree = 0x4000, // 040000 in octal
 
     /// <summary>Gitlink (submodule).</summary>
-    Gitlink = 0xE000 // 160000 in octal
+    GitLink = 0xE000 // 160000 in octal
 }
