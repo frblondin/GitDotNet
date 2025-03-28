@@ -15,9 +15,19 @@ internal sealed class FastInsertWriter : IDisposable
 
     public void WriteTransformations(TransformationComposer composer)
     {
-        foreach (var (path, (changeType, stream)) in composer.Changes)
+        try
         {
-            Write(path, changeType, stream);
+            foreach (var (path, (changeType, stream, fileMode)) in composer.Changes)
+            {
+                Write(path, changeType, stream, fileMode);
+            }
+        }
+        finally
+        {
+            foreach (var (_, (_, stream, _)) in composer.Changes)
+            {
+                stream?.Dispose();
+            }
         }
     }
 
@@ -26,7 +36,9 @@ internal sealed class FastInsertWriter : IDisposable
         switch (changeType)
         {
             case TransformationComposer.TransformationType.AddOrModified:
-                _writer.WriteLine($"M 100644 inline {path}");
+                ArgumentNullException.ThrowIfNull(stream);
+
+                _writer.WriteLine($"M {fileMode?.ToString() ?? "100644"} inline {path}");
                 _writer.WriteLine($"data {stream!.Length}");
 
                 // Flush the writer to ensure the stream is written at the correct position
