@@ -1,4 +1,5 @@
 using System.IO.Abstractions;
+using GitDotNet.Data;
 using GitDotNet.Readers;
 using GitDotNet.Tools;
 
@@ -11,25 +12,30 @@ public class RepositoryInfo : IRepositoryInfo
 {
     private readonly Lazy<string> _path;
     private readonly Lazy<ConfigReader> _config;
+    private readonly Lazy<CurrentOperationReader> _operationReader;
     private readonly IFileSystem _fileSystem;
 
-    internal RepositoryInfo(string path, ConfigReaderFactory configReaderFactory, IFileSystem fileSystem, GitCliCommand cliCommand)
+    internal RepositoryInfo(string path, ConfigReaderFactory configReaderFactory, CurrentOperationReaderFactory operationReaderFactory, IFileSystem fileSystem, GitCliCommand cliCommand)
     {
         _path = new Lazy<string>(() => cliCommand.GetAbsoluteGitPath(path) ?? throw new InvalidOperationException("Not a git repository."));
         _config = new(() => configReaderFactory(fileSystem.Path.Combine(Path, "config")));
+        _operationReader = new(() => operationReaderFactory(this));
         _fileSystem = fileSystem;
     }
 
-    /// <summary>Gets the canonicalized absolute path of the repository.</summary>
+    /// <inheritdoc/>
     public virtual string Path => _path.Value;
 
-    /// <summary>Gets the root path of the git repository containing files.</summary>
+    /// <inheritdoc/>
     public virtual string RootFilePath => Config.IsBare ?
         throw new InvalidOperationException("A bare repository does not contain files.") :
         (_fileSystem.Path.GetDirectoryName(Path) ?? throw new InvalidOperationException("No root path could be found."));
 
-    /// <summary>Gets the <see cref="ConfigReader"/> instance associated with the repository.</summary>
+    /// <inheritdoc/>
     public ConfigReader Config => _config.Value;
+
+    /// <summary>Gets the current operation being performed.</summary>
+    public CurrentOperation CurrentOperation => _operationReader.Value.Read();
 
     /// <summary>Gets the git normalized path of a file.</summary>
     /// <param name="fullPath">The full path of file or directory.</param>
@@ -47,4 +53,7 @@ public interface IRepositoryInfo
 
     /// <summary>Gets the root path of the git repository containing files.</summary>
     string RootFilePath { get; }
+
+    /// <summary>Gets the <see cref="ConfigReader"/> instance associated with the repository.</summary>
+    ConfigReader Config { get; }
 }

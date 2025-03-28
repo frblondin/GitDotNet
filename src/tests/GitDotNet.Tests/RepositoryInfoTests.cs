@@ -15,7 +15,7 @@ internal class RepositoryInfoTests
             A.CallTo(() => f.IsBare).Returns(false)));
         var cliCommand = A.Fake<GitCliCommand>(o => o.ConfigureFake(f =>
             A.CallTo(() => f.GetAbsoluteGitPath(A<string>._)).Returns(@"repository/.git")));
-        var sut = new RepositoryInfo(@"repository", _ => configReader, new FileSystem(), cliCommand);
+        var sut = new RepositoryInfo(@"repository", _ => configReader, _ => throw new NotImplementedException(), new FileSystem(), cliCommand);
 
         // Act
         var path = sut.GetRepositoryPath(@"repository/A/B/foo.exe");
