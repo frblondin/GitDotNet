@@ -82,5 +82,5 @@ public enum IndexEntryType
     Symlink = 10,
 
     /// <summary>A gitlink (submodule).</summary>
-    Gitlink = 14,
+    GitLink = 14,
 }
