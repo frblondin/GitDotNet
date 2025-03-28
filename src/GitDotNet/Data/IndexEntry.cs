@@ -41,7 +41,7 @@ public record IndexEntry
     public HashId Id { get; }
 
     /// <summary>Gets the path of the file.</summary>
-    public string Path { get; }
+    public GitPath Path { get; }
 
     /// <summary>Retrieves an entry asynchronously./// </summary>
     /// <typeparam name="TEntry">Represents the type of entry being retrieved.</typeparam>

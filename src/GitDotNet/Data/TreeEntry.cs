@@ -21,11 +21,7 @@ public record class TreeEntry : Entry
 
     /// <summary>Gets the item with the specified relative path.</summary>
     /// <param name="path">The path of the item.</param>
-    public async Task<TreeEntryItem?> GetPathAsync(string path) => await GetPathAsync(new GitPath(path));
-
-    /// <summary>Gets the item with the specified relative path.</summary>
-    /// <param name="path">The path of the item.</param>
-    public async Task<TreeEntryItem?> GetPathAsync(GitPath path)
+    public async Task<TreeEntryItem?> GetFromPathAsync(GitPath path)
     {
         var child = Children.FirstOrDefault(x => x.Name.Equals(path.Root, StringComparison.Ordinal));
         if (child is not null && path.Length > 1)

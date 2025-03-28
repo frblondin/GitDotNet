@@ -40,7 +40,7 @@ public class IndexTests
             entries[0].LastDataChange.Should().Be(new DateTime(2023, 3, 23, 17, 52, 06));
             entries[0].Type.Should().Be(IndexEntryType.Regular);
             entries[0].UnixPermissions.Should().Be(420);
-            entries[0].Path.Should().Be(".editorconfig");
+            entries[0].Path.ToString().Should().Be(".editorconfig");
             entries[0].FileSize.Should().Be(7823);
             var entry = await entries[0].GetEntryAsync<BlobEntry>();
             entry.Id.ToString().Should().Be("cbfaa61957324a6c5714d86008aac650adf19d24");
@@ -64,7 +64,7 @@ public class IndexTests
         {
             var entries = await sut.GetEntriesAsync();
             entries.Should().HaveCount(1);
-            entries[0].Path.Should().Be("test.txt");
+            entries[0].Path.ToString().Should().Be("test.txt");
             entries[0].Type.Should().Be(IndexEntryType.Regular);
             entries[0].UnixPermissions.Should().Be(420);
             var blob = await entries[0].GetEntryAsync<BlobEntry>();

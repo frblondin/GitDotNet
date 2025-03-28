@@ -74,7 +74,7 @@ public partial class GitConnection
         if (entryPath is not null)
         {
             var currentRoot = await currentCommit.GetRootTreeAsync();
-            var entry = await currentRoot.GetPathAsync(entryPath!);
+            var entry = await currentRoot.GetFromPathAsync(entryPath!);
 
             // Entry was not found in the current commit, was it deleted or renamed?
             if (entry is null)

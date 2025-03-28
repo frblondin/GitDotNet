@@ -21,7 +21,7 @@ internal sealed class FastInsertWriter : IDisposable
         }
     }
 
-    private void Write(string path, TransformationComposer.TransformationType changeType, Stream? stream)
+    private void Write(GitPath path, TransformationComposer.TransformationType changeType, Stream? stream, FileMode? fileMode)
     {
         switch (changeType)
         {
