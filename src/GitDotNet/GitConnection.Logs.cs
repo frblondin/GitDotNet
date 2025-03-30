@@ -148,6 +148,20 @@ public partial class GitConnection
         }
     }
 
+    /// <summary>Retrieves the merge base commit between two specified commits asynchronously.</summary>
+    /// <param name="committish1">The identifier of the first commit to compare for the merge base.</param>
+    /// <param name="committish2">The commit entry of the second commit used in the comparison.</param>
+    /// <returns>Returns the merge base commit entry or null if no merge base exists.</returns>
+    public async Task<CommitEntry?> GetMergeBaseAsync(string committish1, string committish2)
+    {
+        string? result = null;
+        GitCliCommand.Execute(Info.Path, $"merge-base {committish1} {committish2}", outputDataReceived: (_, e) =>
+        {
+            if (e.Data is not null) result = e.Data.Trim();
+        });
+        return result != null ? await Objects.GetAsync<CommitEntry>(result) : null;
+    }
+
     private enum Continuation
     {
         Continue,
