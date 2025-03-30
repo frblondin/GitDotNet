@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using GitDotNet.Data;
 
 namespace GitDotNet.Readers;
 
