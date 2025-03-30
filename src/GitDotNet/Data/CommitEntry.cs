@@ -8,7 +8,7 @@ using GitDotNet.Tools;
 namespace GitDotNet;
 
 /// <summary>Represents a Git commit entry.</summary>
-public record class CommitEntry : Entry
+public class CommitEntry : Entry
 {
     private const string PendingReading = "<pending reading>";
 

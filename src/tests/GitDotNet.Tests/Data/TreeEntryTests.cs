@@ -56,6 +56,6 @@ public class TreeEntryTests
         return [.. data];
     }
 
-    private record class MockBlobEntry(HashId Id) : BlobEntry(Id, [], _ => throw new NotImplementedException()) { }
-    private record class MockTreeEntry(HashId Id) : TreeEntry(Id, [], CreateObjectResolver(h => new MockTreeEntry(h))) { }
+    private class MockBlobEntry(HashId Id) : BlobEntry(Id, [], _ => throw new NotImplementedException()) { }
+    private class MockTreeEntry(HashId Id) : TreeEntry(Id, [], CreateObjectResolver(h => new MockTreeEntry(h))) { }
 }

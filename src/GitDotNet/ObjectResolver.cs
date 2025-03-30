@@ -128,7 +128,11 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         _options.Value.ApplyTo(entry, result, _disposed.Token);
 
         // Ensure the hash is correct, it may be null if produced through OFS delta within a pack from offset.
-        return result is null || result.Id.Hash.Count > 0 ? result : result with { Id = id };
+        if (result is not null && (result.Id is null || result.Id.Hash.Count == 0))
+        {
+            result.Id = id;
+        }
+        return result;
     }
 
     private async Task<UnlinkedEntry?> LoadFromPacksAsync(HashId id, Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider, bool throwIfNotFound)

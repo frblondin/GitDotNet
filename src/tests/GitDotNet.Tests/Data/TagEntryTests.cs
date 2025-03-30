@@ -84,5 +84,5 @@ public class TagEntryTests
         act.Should().Throw<InvalidOperationException>().WithMessage("Invalid tag entry: missing tag.");
     }
 
-    private record class MockCommitEntry(HashId Id) : Entry(EntryType.Commit, Id, []) { }
+    private class MockCommitEntry(HashId Id) : Entry(EntryType.Commit, Id, []) { }
 }
