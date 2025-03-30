@@ -12,6 +12,7 @@ namespace GitDotNet;
 public delegate GitConnection GitConnectionProvider(string path);
 
 /// <summary>Represents a Git repository.</summary>
+[DebuggerDisplay("{Info.Path,nq}")]
 public partial class GitConnection : IDisposable
 {
     private readonly Lazy<IObjectResolver> _objects;
