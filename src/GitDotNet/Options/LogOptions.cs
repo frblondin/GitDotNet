@@ -2,16 +2,16 @@ namespace GitDotNet;
 
 /// <summary>Represents options for logging commits in a Git repository.</summary>
 /// <param name="SortBy">Specifies the traversal method for sorting commits.</param>
-/// <param name="LastReferences">The last references to include in the log.</param>
+/// <param name="ExcludeReachableFrom">The reference that should make the traversal stop.</param>
 /// <param name="Start">The start time for filtering commits.</param>
 /// <param name="End">The end time for filtering commits.</param>
 public record class LogOptions(LogTraversal SortBy,
-                               IList<string>? LastReferences = null,
+                               string? ExcludeReachableFrom = null,
                                DateTimeOffset? Start = null,
                                DateTimeOffset? End = null)
 {
     /// <summary>Gets the default log options.</summary>
-    public static LogOptions Default { get; } = new(LogTraversal.Time);
+    public static LogOptions Default { get; } = new(LogTraversal.FirstParentOnly);
 }
 
 /// <summary>Specifies the traversal method for sorting commits in a Git log.</summary>
@@ -29,7 +29,4 @@ public enum LogTraversal
 
     /// <summary>Sort commits topologically, meaning parents before children.</summary>
     Topological = 1 << 2,
-
-    /// <summary>Sort commits in reverse order.</summary>
-    Reverse = 1 << 3,
 }

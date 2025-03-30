@@ -4,7 +4,6 @@ using System.IO.Compression;
 using System.Text;
 using FakeItEasy;
 using FluentAssertions;
-using FluentAssertions.Common;
 using FluentAssertions.Execution;
 using GitDotNet.Readers;
 using GitDotNet.Tests.Helpers;
@@ -305,16 +304,40 @@ public class GitConnectionTests
         // Act
         var commits = await sut.GetLogAsync("HEAD", LogOptions.Default with
         {
-            SortBy = LogTraversal.FirstParentOnly | LogTraversal.Topological | LogTraversal.Reverse,
-            LastReferences = ["fee84b5575de791d1ac1edb089a63ab85d504f3c"],
-        })
-            .ToListAsync();
+            SortBy = LogTraversal.FirstParentOnly | LogTraversal.Topological,
+            ExcludeReachableFrom = "fee84b5575de791d1ac1edb089a63ab85d504f3c",
+        }).ToListAsync();
 
         // Assert
         using (new AssertionScope())
         {
             commits.Should().HaveCount(1);
             commits[0].Message.Should().Be("message2efc0543-4f74-4401-83e3-dd5b66ec2016");
+        }
+    }
+
+    [Test]
+    public async Task GetAllMergeCommitsLog()
+    {
+        // Arrange
+        var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteMergeRepository), folder, overwriteFiles: true);
+        using var sut = CreateProvider().Invoke($"{folder}/.git");
+
+        // Act
+        var commits = await sut.GetLogAsync("HEAD", LogOptions.Default with
+        {
+            SortBy = LogTraversal.Time,
+            ExcludeReachableFrom = "de2877f9d577ee1efc6d770bdc37079ef293d946",
+        }).ToListAsync();
+
+        // Assert
+        using (new AssertionScope())
+        {
+            commits.Should().HaveCount(3);
+            commits[0].Id.ToString().Should().Be("2e18708dc062f5d1c9f94e82b39081f9bdc17d82");
+            commits[1].Id.ToString().Should().Be("57e779b92132f469060e6aaf2c5d61bb687e5c09");
+            commits[2].Id.ToString().Should().Be("e159d393542c45cb945e892d6245fb9647e9df73");
         }
     }
 
