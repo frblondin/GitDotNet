@@ -389,6 +389,24 @@ public class GitConnectionTests
     }
 
     [Test]
+    public async Task GetMergeBase()
+    {
+        // Arrange
+        var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteMergeRepository), folder, overwriteFiles: true);
+        using var sut = CreateProvider().Invoke($"{folder}/.git");
+
+        // Act
+        var commit = await sut.GetMergeBaseAsync("e159d393542c45cb945e892d6245fb9647e9df73", "57e779b92132f469060e6aaf2c5d61bb687e5c09");
+
+        // Assert
+        using (new AssertionScope())
+        {
+            commit.Id.ToString().Should().Be("de2877f9d577ee1efc6d770bdc37079ef293d946");
+        }
+    }
+
+    [Test]
     public async Task GetBranchTips()
     {
         // Arrange
