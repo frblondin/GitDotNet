@@ -64,6 +64,6 @@ public class CommitEntryTests
         act.Should().Throw<InvalidOperationException>().WithMessage("Invalid commit entry: missing tree.");
     }
 
-    private record class MockTreeEntry(HashId Id) : TreeEntry(Id, [], CreateObjectResolver(h => new MockTreeEntry(h))) { }
-    private record class MockCommitEntry(HashId Id) : CommitEntry(Id, [], CreateObjectResolver(h => new MockTreeEntry(h))) { }
+    private class MockTreeEntry(HashId Id) : TreeEntry(Id, [], CreateObjectResolver(h => new MockTreeEntry(h))) { }
+    private class MockCommitEntry(HashId Id) : CommitEntry(Id, [], CreateObjectResolver(h => new MockTreeEntry(h))) { }
 }

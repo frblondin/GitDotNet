@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 namespace GitDotNet;
 
 /// <summary>Represents a Git blob entry, which contains file data.</summary>
-public partial record class BlobEntry : Entry
+public partial class BlobEntry : Entry
 {
     private static readonly byte[] _lfsPointerSignature = Encoding.UTF8.GetBytes("version https://git-lfs.github.com/spec/v1\noid sha256:");
 

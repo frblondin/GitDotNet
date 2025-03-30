@@ -7,7 +7,7 @@ namespace GitDotNet;
 
 /// <summary>Represents an item in a Git tree entry.</summary>
 [DebuggerDisplay("{Name,nq}")]
-public record class TreeEntryItem
+public sealed class TreeEntryItem : IEquatable<TreeEntryItem>
 {
     private readonly Func<Task<Entry>> _entryProvider;
     private Entry? _entry;
@@ -124,4 +124,13 @@ public record class TreeEntryItem
             }
         }
     }
+
+    /// <inheritdoc/>
+    public bool Equals(TreeEntryItem? other) => other is not null && Id.Equals(other.Id);
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as TreeEntryItem);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => Id.GetHashCode();
 }

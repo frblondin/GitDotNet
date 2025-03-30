@@ -4,7 +4,7 @@ using GitDotNet.Tools;
 namespace GitDotNet;
 
 /// <summary>Represents a Git tag entry.</summary>
-public sealed record class TagEntry : Entry
+public sealed class TagEntry : Entry
 {
     private readonly IObjectResolver _objectResolver;
     private readonly Lazy<Content> _content;

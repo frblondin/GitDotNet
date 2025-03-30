@@ -5,7 +5,7 @@ using GitDotNet.Readers;
 namespace GitDotNet;
 
 /// <summary>Represents a Git tree entry, which contains references to other entries (blobs, trees, etc.).</summary>
-public record class TreeEntry : Entry
+public class TreeEntry : Entry
 {
     private readonly IObjectResolver _objectResolver;
     private IList<TreeEntryItem>? _items;
