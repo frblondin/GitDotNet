@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
 using System.Text.RegularExpressions;
@@ -78,7 +79,7 @@ public partial class GitConnection : IDisposable
 
     /// <summary>Gets the list of local and remote branches.</summary>
     /// <returns>A list of branch names.</returns>
-    public Branch.List Branches => _branchRefReader.GetBranches();
+    public Branch.List Branches => new(Info, _branchRefReader);
 
     /// <summary>Gets the commit hash for a given committish reference, handling ~ and ^ navigation.</summary>
     /// <param name="committish">The committish reference.</param>

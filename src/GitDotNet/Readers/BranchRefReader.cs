@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.IO;
 using System.IO.Abstractions;
 using System.Text.RegularExpressions;
 using GitDotNet.Tools;
@@ -10,12 +9,12 @@ internal delegate BranchRefReader BranchRefReaderFactory(GitConnection connectio
 
 internal partial class BranchRefReader(GitConnection connection, IFileSystem fileSystem)
 {
-    internal Branch.List GetBranches()
+    internal IImmutableDictionary<string, Branch> GetBranches()
     {
         var branches = new SortedSet<Branch>();
         GetBranchesFromPackedRefsFile(branches);
         GetBranchesFromRefsDirectory(branches);
-        return new Branch.List(branches.ToImmutableDictionary(b => b.CanonicalName));
+        return branches.ToImmutableDictionary(b => b.CanonicalName);
     }
 
     private void GetBranchesFromPackedRefsFile(SortedSet<Branch> branches)
