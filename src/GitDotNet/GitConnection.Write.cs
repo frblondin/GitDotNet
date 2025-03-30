@@ -49,30 +49,45 @@ public partial class GitConnection
     /// <param name="transformations">The transformations to apply to the repository.</param>
     /// <param name="commit">The commit entry to commit.</param>
     /// <param name="options">The <see cref="CommitOptions"/> that specify the commit behavior.</param>
-    public async Task<CommitEntry> CommitAsync(string branchName, Func<ITransformationComposer, ITransformationComposer> transformations, CommitEntry commit, CommitOptions? options = null)
+    public async Task<CommitEntry> CommitAsync(string branchName, Func<ITransformationComposer, ITransformationComposer> transformations, CommitEntry commit, CommitOptions? options = null) =>
+        await CommitAsync(branchName, c =>
+        {
+            transformations(c);
+            return Task.FromResult(c);
+        }, commit, options);
+
+    /// <summary>
+    /// Commits the changes in the transformation composer to the repository.
+    /// This method is usually used for bare repositories.
+    /// </summary>
+    /// <param name="branchName">The branch name to commit to.</param>
+    /// <param name="transformations">The transformations to apply to the repository.</param>
+    /// <param name="commit">The commit entry to commit.</param>
+    /// <param name="options">The <see cref="CommitOptions"/> that specify the commit behavior.</param>
+    public async Task<CommitEntry> CommitAsync(string branchName, Func<ITransformationComposer, Task<ITransformationComposer>> transformations, CommitEntry commit, CommitOptions? options = null)
     {
         if (options != null && options.AmendPreviousCommit) throw new InvalidOperationException("Cannot amend previous commit using this method.");
 
-        var tip = Branches.TryGet(branchName, out var branch) ? await branch.GetTipAsync() : null;
         var canonicalName = Reference.LooksLikeLocalBranch(branchName) ? branchName : $"{Reference.LocalBranchPrefix}{branchName}";
-        var commitWithParent = commit with { Parents = tip is null ? [] : [tip] };
 
         var composer = _transformationComposerFactory(Info.Path);
-        transformations(composer);
+        await transformations(composer);
 
-        var hash = await composer.CommitAsync(canonicalName, commitWithParent, options);
+        var hash = await composer.CommitAsync(canonicalName, commit, options);
         (Objects as IObjectResolverInternal)?.ReinitializePacks();
         return await Objects.GetAsync<CommitEntry>(hash);
     }
 
     /// <summary>Creates a new in-memory commit entry before it gets committed to repository.</summary>
     /// <param name="message">The commit message.</param>
+    /// <param name="parents">The parent commits.</param>
     /// <param name="author">The author of the commit.</param>
     /// <param name="committer">The committer of the commit.</param>
     /// <returns>The new commit entry.</returns>
-    public CommitEntry CreateCommit(string message, Signature? author = null, Signature? committer = null) =>
+    public CommitEntry CreateCommit(string message, IList<CommitEntry> parents, Signature? author = null, Signature? committer = null) =>
         new(HashId.Empty, [], Objects)
         {
-            _content = new(new CommitEntry.Content("", author ?? Info.Config.CreateSignature(), committer ?? Info.Config.CreateSignature(), [], message))
+            _content = new(new CommitEntry.Content("", author ?? Info.Config.CreateSignature(), committer ?? Info.Config.CreateSignature(), [], message)),
+            Parents = parents,
         };
 }

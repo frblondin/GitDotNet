@@ -258,6 +258,7 @@ public class GitConnectionTests
         var commit = await sut.CommitAsync("main",
                                            transformations,
                                            sut.CreateCommit("Commit message",
+                                                            [tip],
                                                             new("test", "test@corporate.com", DateTimeOffset.Now),
                                                             new("test", "test@corporate.com", DateTimeOffset.Now)),
                                            new(UpdateBranch: updateBranch));
@@ -277,6 +278,7 @@ public class GitConnectionTests
         var commit = await sut.CommitAsync("main",
                                            c => c.AddOrUpdate("test.txt", Encoding.UTF8.GetBytes("foo")),
                                            sut.CreateCommit("Commit message",
+                                                            [],
                                                             new("test", "test@corporate.com", DateTimeOffset.Now),
                                                             new("test", "test@corporate.com", DateTimeOffset.Now)));
 
