@@ -1,5 +1,4 @@
 using System.IO.Abstractions;
-using GitDotNet.Data;
 using GitDotNet.Readers;
 using GitDotNet.Tools;
 

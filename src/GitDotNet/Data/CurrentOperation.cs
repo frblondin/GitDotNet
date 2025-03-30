@@ -1,4 +1,4 @@
-namespace GitDotNet.Data;
+namespace GitDotNet;
 
 /// <summary>
 /// Determines the pending operation of a git repository - ie, whether an operation
