@@ -1,19 +1,22 @@
+using System.Diagnostics.CodeAnalysis;
+using GitDotNet.Tools;
+
 namespace GitDotNet;
 
 public partial class GitConnection
 {
     /// <summary>Gets the log of commits from the specified reference.</summary>
-    /// <param name="reference">The reference to start from.</param>
+    /// <param name="includeReachableFrom">The reference to start from.</param>
     /// <param name="options">The options for the log.</param>
     /// <returns>An asynchronous enumerable of commit entries.</returns>
-    public IAsyncEnumerable<CommitEntry> GetLogAsync(string reference, LogOptions? options = null) =>
-        GetLogImplAsync(reference, options);
+    public IAsyncEnumerable<CommitEntry> GetLogAsync(string includeReachableFrom, LogOptions? options = null) =>
+        GetLogImplAsync(includeReachableFrom, options);
 
-    internal IAsyncEnumerable<CommitEntry> GetLogImplAsync(string reference,
-                                                           LogOptions? options = null,
-                                                           BlobEntry? filterByEntry = null)
+    internal IAsyncEnumerable<CommitEntry> GetLogImplAsync(string includeReachableFrom,
+        LogOptions? options = null,
+        BlobEntry? filterByEntry = null)
     {
-        var result = GetChildFirstLogAsync(reference, options, filterByEntry);
+        var result = GetChildFirstLogAsync(includeReachableFrom, options, filterByEntry);
         if (options?.SortBy.HasFlag(LogTraversal.Topological) ?? false)
         {
             result = result.Reverse();
@@ -21,22 +24,19 @@ public partial class GitConnection
         return result;
     }
 
-    private async IAsyncEnumerable<CommitEntry> GetChildFirstLogAsync(string reference,
+    private async IAsyncEnumerable<CommitEntry> GetChildFirstLogAsync(string includeReachableFrom,
                                                                       LogOptions? options = null,
                                                                       BlobEntry? filterByEntry = null)
     {
         options ??= LogOptions.Default;
 
-        var endingCommits = new HashSet<HashId>();
-        foreach (var @ref in options.LastReferences ?? Enumerable.Empty<string>())
-        {
-            var commit = await GetCommittishAsync(@ref);
-            endingCommits.Add(commit.Id);
-        }
+        var endingCommits = options.ExcludeReachableFrom != null ?
+            await GetCommittishAsync(options.ExcludeReachableFrom) :
+            null;
 
         var commitsToProcess = new Queue<HashId>();
         var processedCommits = new HashSet<HashId>();
-        var startCommit = await GetCommittishAsync(reference);
+        var startCommit = await GetCommittishAsync(includeReachableFrom);
         var previousCommit = startCommit;
         var root = await startCommit.GetRootTreeAsync();
         var entryPath = filterByEntry is not null ? await root.GetPathToAsync(filterByEntry) : null;
@@ -50,7 +50,7 @@ public partial class GitConnection
 
             if (options.Start.HasValue && currentCommit.CommitTime < options.Start.Value) continue;
             if (options.End.HasValue && currentCommit.CommitTime > options.End.Value) continue;
-            if (endingCommits.Contains(currentCommit.Id)) continue;
+            if (endingCommits?.Equals(currentCommit) ?? false) continue;
 
             // Do not yield the commit if the entity hasn't changed or if entity didn't exist in the previous commit
             (var continuation, entryPath, lastEntryId) = await CheckContinuationAsync(entryPath,
@@ -137,8 +137,6 @@ public partial class GitConnection
         var parents = (IEnumerable<CommitEntry>)await currentCommit.GetParentsAsync();
         if (options.SortBy.HasFlag(LogTraversal.Time))
             parents = parents.OrderBy(p => p.CommitTime);
-        if (options.SortBy.HasFlag(LogTraversal.Reverse))
-            parents = parents.Reverse();
 
         foreach (var parent in parents.Select(p => p.Id))
         {
