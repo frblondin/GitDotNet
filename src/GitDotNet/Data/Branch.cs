@@ -3,6 +3,7 @@ using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using GitDotNet.Readers;
 using GitDotNet.Tools;
 
 namespace GitDotNet;
@@ -140,12 +141,19 @@ public sealed class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>,
     [DebuggerDisplay("Count = {Count}")]
     public class List : IReadOnlyCollection<Branch>
     {
-        private readonly IImmutableDictionary<string, Branch> _branches;
+        private readonly IRepositoryInfo _info;
+        private readonly BranchRefReader _reader;
+        private IImmutableDictionary<string, Branch> _branches;
 
-        internal List(IImmutableDictionary<string, Branch> branches)
+        internal List(IRepositoryInfo info, BranchRefReader reader)
         {
-            _branches = branches;
+            _info = info;
+            _reader = reader;
+
+            _branches = ResetBranches();
         }
+
+        private IImmutableDictionary<string, Branch> ResetBranches() => _branches = _reader.GetBranches();
 
         /// <summary>Gets the branch with the specified name.</summary>
         /// <param name="name">The canonical or friendly name of the branch.</param>
@@ -171,6 +179,19 @@ public sealed class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>,
                 return branch;
             }
             return null;
+        }
+
+        /// <summary>
+        /// Removes a specified branch from the repository. The removal can be forced or done safely depending on the
+        /// provided option.
+        /// </summary>
+        /// <param name="name">Specifies the branch to be removed from the repository.</param>
+        /// <param name="force">Indicates whether the branch should be removed forcefully, bypassing safety checks.</param>
+        [ExcludeFromCodeCoverage]
+        public void Remove(string name, bool force = false)
+        {
+            GitCliCommand.Execute(_info.Path, $"branch {(force ? "-D" : "-d")} {name}");
+            ResetBranches();
         }
 
         /// <inheritdoc/>
