@@ -47,29 +47,31 @@ public class TreeEntry : Entry
 
     /// <summary>Gets all blob entries in the tree.</summary>
     /// <returns>An enumerable of all blob entries in the tree.</returns>
-    public async Task<IEnumerable<(GitPath Path, TreeEntryItem BlobEntry)>> GetAllBlobEntriesAsync(GitPath? basePath = null)
+    public async IAsyncEnumerable<(GitPath Path, TreeEntryItem BlobEntry)> GetAllBlobEntriesAsync(GitPath? basePath = null)
     {
-        var result = new List<(GitPath Path, TreeEntryItem BlobEntry)>();
-        var stack = new Stack<string>(basePath ?? []);
-        foreach (var child in Children)
+        var channel = Channel.CreateUnbounded<(GitPath Path, TreeEntryItem Stream)>();
+        var task = GetAllBlobEntriesAsync(channel, x => x, basePath);
+        await foreach (var result in channel.Reader.ReadAllAsync())
         {
-            stack.Push(child.Name);
-            await child.GetAllBlobEntriesAsync(result, stack);
-            stack.Pop();
+            yield return result;
         }
-        return result.AsEnumerable();
+        await task;
     }
 
     /// <summary>Gets all blob entries in the tree.</summary>
     /// <param name="channel">The channel to write the results to.</param>
     /// <param name="func">The function to apply to each blob entry.</param>
+    /// <param name="basePath">This optional parameter specifies the base path for the blob entries being retrieved.</param>
     /// <returns>An enumerable of all blob entries in the tree.</returns>
     [ExcludeFromCodeCoverage]
-    public async Task GetAllBlobEntriesAsync<TResult>(Channel<TResult> channel, Func<(GitPath Path, TreeEntryItem BlobEntry), TResult> func)
+    public async Task GetAllBlobEntriesAsync<TResult>(Channel<TResult> channel, Func<(GitPath Path, TreeEntryItem BlobEntry), TResult> func, GitPath? basePath = null)
     {
+        var stack = new Stack<string>(basePath ?? []);
         foreach (var child in Children)
         {
+            stack.Push(child.Name);
             await child.GetAllBlobEntriesAsync(channel, func, new Stack<string>([child.Name]));
+            stack.Pop();
         }
         channel.Writer.Complete();
     }
