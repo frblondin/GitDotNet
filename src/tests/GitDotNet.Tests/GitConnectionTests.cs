@@ -67,6 +67,27 @@ public class GitConnectionTests
     }
 
     [Test]
+    public async Task Branch()
+    {
+        // Arrange
+        var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        TestUtils.ForceDeleteDirectory(folder);
+        ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteRepository), folder, overwriteFiles: true);
+        using var sut = CreateProvider().Invoke(folder);
+
+        // Act
+        var branch = sut.Branches.Add("new_branch", "main~1");
+
+        // Assert
+        using (new AssertionScope())
+        {
+            branch.CanonicalName.Should().Be("refs/heads/new_branch");
+            var tip = await branch.GetTipAsync();
+            tip.Id.ToString().Should().Be("fee84b5575de791d1ac1edb089a63ab85d504f3c");
+        }
+    }
+
+    [Test]
     public async Task DiffLastTwoCommits()
     {
         // Arrange
