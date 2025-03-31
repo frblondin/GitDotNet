@@ -177,7 +177,14 @@ public partial class GitConnection : IDisposable
     /// <summary>Determines whether the specified path is a valid Git repository.</summary>
     /// <param name="path">The path to the repository.</param>
     /// <returns>true if the path is a valid Git repository; otherwise, false.</returns>
-    public static bool IsValid(string path) => new GitCliCommand().GetAbsoluteGitPath(path) != null;
+    public static bool IsValid(string path)
+    {
+        var fullPath = Path.GetFullPath(path).Replace('\\', '/');
+        var gitFolder = new GitCliCommand().GetAbsoluteGitPath(fullPath)?.Replace('\\', '/');
+        return gitFolder != null &&
+            (gitFolder.Equals(fullPath.ToString()) || // Bare repository
+            gitFolder.Equals(fullPath + "/.git")); // Non-bare repository
+    }
 
     /// <summary>Creates a new Git repository at the specified path.</summary>
     /// <param name="path">The path to the repository.</param>

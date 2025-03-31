@@ -24,11 +24,19 @@ public class GitConnectionTests
         ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteRepository), folder, overwriteFiles: true);
         using var sut = CreateProvider().Invoke($"{folder}/.git");
 
-        // Act
-        var result = GitConnection.IsValid(".");
+        // Act, Assert
+        using (new AssertionScope())
+        {
+            GitConnection.IsValid(folder).Should().BeTrue();
+            GitConnection.IsValid($"{folder}/.git").Should().BeTrue();
+        }
+    }
 
-        // Assert
-        result.Should().BeTrue();
+    [Test]
+    public void IsValidReturnsFalseForNestedPath()
+    {
+        // Act, Assert
+        GitConnection.IsValid(".").Should().BeFalse();
     }
 
     [Test]
