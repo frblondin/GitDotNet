@@ -11,8 +11,8 @@ internal class TreeComparer(IOptions<GitConnection.Options> options) : ITreeComp
     {
         var result = new List<Change>();
 
-        var oldBlobs = old is not null ? await old.GetAllBlobEntriesAsync() : null;
-        var newBlobs = @new is not null ? await @new.GetAllBlobEntriesAsync() : null;
+        var oldBlobs = old is not null ? old.GetAllBlobEntriesAsync().ToEnumerable().ToList() : null;
+        var newBlobs = @new is not null ? @new.GetAllBlobEntriesAsync().ToEnumerable().ToList() : null;
 
         FindModifiedBlobsUsingIds(result, oldBlobs, newBlobs);
         FindRenamedBlobsWithSameId(result, oldBlobs, newBlobs);
