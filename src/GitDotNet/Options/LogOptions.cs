@@ -5,10 +5,12 @@ namespace GitDotNet;
 /// <param name="ExcludeReachableFrom">The reference that should make the traversal stop.</param>
 /// <param name="Start">The start time for filtering commits.</param>
 /// <param name="End">The end time for filtering commits.</param>
+/// <param name="Path">Show only commits that are enough to explain how the specified blob path came to be</param>
 public record class LogOptions(LogTraversal SortBy,
                                string? ExcludeReachableFrom = null,
                                DateTimeOffset? Start = null,
-                               DateTimeOffset? End = null)
+                               DateTimeOffset? End = null,
+                               GitPath? Path = null)
 {
     /// <summary>Gets the default log options.</summary>
     public static LogOptions Default { get; } = new(LogTraversal.FirstParentOnly);

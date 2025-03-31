@@ -9,14 +9,9 @@ public partial class GitConnection
     /// <param name="includeReachableFrom">The reference to start from.</param>
     /// <param name="options">The options for the log.</param>
     /// <returns>An asynchronous enumerable of commit entries.</returns>
-    public IAsyncEnumerable<CommitEntry> GetLogAsync(string includeReachableFrom, LogOptions? options = null) =>
-        GetLogImplAsync(includeReachableFrom, options);
-
-    internal IAsyncEnumerable<CommitEntry> GetLogImplAsync(string includeReachableFrom,
-        LogOptions? options = null,
-        BlobEntry? filterByEntry = null)
+    public IAsyncEnumerable<CommitEntry> GetLogAsync(string includeReachableFrom, LogOptions? options = null)
     {
-        var result = GetChildFirstLogAsync(includeReachableFrom, options, filterByEntry);
+        var result = GetChildFirstLogAsync(includeReachableFrom, options);
         if (options?.SortBy.HasFlag(LogTraversal.Topological) ?? false)
         {
             result = result.Reverse();
@@ -25,8 +20,7 @@ public partial class GitConnection
     }
 
     private async IAsyncEnumerable<CommitEntry> GetChildFirstLogAsync(string includeReachableFrom,
-                                                                      LogOptions? options = null,
-                                                                      BlobEntry? filterByEntry = null)
+        LogOptions? options = null)
     {
         options ??= LogOptions.Default;
 
@@ -38,8 +32,7 @@ public partial class GitConnection
         var processedCommits = new HashSet<HashId>();
         var startCommit = await GetCommittishAsync(includeReachableFrom);
         var previousCommit = startCommit;
-        var root = await startCommit.GetRootTreeAsync();
-        var entryPath = filterByEntry is not null ? await root.GetPathToAsync(filterByEntry) : null;
+        var entryPath = options.Path;
         commitsToProcess.Enqueue(startCommit.Id);
 
         HashId? lastEntryId = null;
