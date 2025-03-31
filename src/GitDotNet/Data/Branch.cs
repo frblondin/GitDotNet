@@ -194,6 +194,18 @@ public sealed class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>,
             ResetBranches();
         }
 
+        /// <summary>Creates a new branch with the specified name from a given commit reference.</summary>
+        /// <param name="name">Specifies the name of the new branch to be created.</param>
+        /// <param name="committish">Indicates the commit reference from which the new branch will be created.</param>
+        /// <param name="allowOverWrite">Determines whether to overwrite an existing branch with the same name.</param>
+        /// <returns>Returns the newly created branch object.</returns>
+        public Branch Add(string name, string committish, bool allowOverWrite = false)
+        {
+            GitCliCommand.Execute(_info.Path, $"branch {(allowOverWrite ? "--force" : "")} {name} {committish}");
+            ResetBranches();
+            return this[name];
+        }
+
         /// <inheritdoc/>
         public IEnumerator<Branch> GetEnumerator() => _branches.Values.GetEnumerator();
 
