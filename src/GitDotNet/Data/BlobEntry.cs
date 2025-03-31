@@ -64,17 +64,6 @@ public partial class BlobEntry : Entry
         return sha;
     }
 
-    /// <summary>Gets the log of commits from the specified reference.</summary>
-    /// <param name="branch">The branch to start from.</param>
-    /// <param name="options">The options for the log.</param>
-    /// <returns>An asynchronous enumerable of commit entries.</returns>
-    [ExcludeFromCodeCoverage]
-    public IAsyncEnumerable<CommitEntry> GetLogAsync(Branch branch, LogOptions? options = null)
-    {
-        var tip = branch.Tip ?? throw new NotSupportedException("Branch has no tip commit.");
-        return branch.Connection.GetLogImplAsync(tip.Id.ToString(), options, this);
-    }
-
     [GeneratedRegex(@"version https://git-lfs.github.com/spec/v1\noid sha256:(?<sha256>[a-f0-9]{64})\nsize (?<size>\d+)", RegexOptions.Compiled)]
     private static partial Regex LfsPointerFormatRegEx();
 }

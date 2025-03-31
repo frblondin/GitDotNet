@@ -353,9 +353,7 @@ public class GitConnectionTests
 
         // Act
         var root = await sut.Head.Tip.GetRootTreeAsync();
-        var entry = await root.GetFromPathAsync(new GitPath("bar.txt"));
-        var blob = await entry.GetEntryAsync<BlobEntry>();
-        var commits = await blob.GetLogAsync(sut.Head, LogOptions.Default with { SortBy = LogTraversal.FirstParentOnly })
+        var commits = await sut.GetLogAsync("HEAD", LogOptions.Default with { Path = "bar.txt", SortBy = LogTraversal.FirstParentOnly })
             .ToListAsync();
 
         // Assert
