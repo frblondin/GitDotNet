@@ -6,12 +6,12 @@ namespace GitDotNet;
 public partial class GitConnection
 {
     /// <summary>Gets the log of commits from the specified reference.</summary>
-    /// <param name="includeReachableFrom">The reference to start from.</param>
+    /// <param name="committish">The reference to start from.</param>
     /// <param name="options">The options for the log.</param>
     /// <returns>An asynchronous enumerable of commit entries.</returns>
-    public IAsyncEnumerable<CommitEntry> GetLogAsync(string includeReachableFrom, LogOptions? options = null)
+    public IAsyncEnumerable<CommitEntry> GetLogAsync(string committish, LogOptions? options = null)
     {
-        var result = GetChildFirstLogAsync(includeReachableFrom, options);
+        var result = GetChildFirstLogAsync(committish, options);
         if (options?.SortBy.HasFlag(LogTraversal.Topological) ?? false)
         {
             result = result.Reverse();
@@ -19,7 +19,7 @@ public partial class GitConnection
         return result;
     }
 
-    private async IAsyncEnumerable<CommitEntry> GetChildFirstLogAsync(string includeReachableFrom,
+    private async IAsyncEnumerable<CommitEntry> GetChildFirstLogAsync(string committish,
         LogOptions? options = null)
     {
         options ??= LogOptions.Default;
@@ -30,7 +30,7 @@ public partial class GitConnection
 
         var commitsToProcess = new Queue<HashId>();
         var processedCommits = new HashSet<HashId>();
-        var startCommit = await GetCommittishAsync(includeReachableFrom);
+        var startCommit = await GetCommittishAsync(committish);
         var previousCommit = startCommit;
         var entryPath = options.Path;
         commitsToProcess.Enqueue(startCommit.Id);
