@@ -209,6 +209,36 @@ public class GitConnectionTests
         }
     }
 
+
+    [Test]
+    public async Task AddFirstCommitWithoutUpdatingBranch()
+    {
+        // Arrange
+        var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        GitConnection.Create(folder, isBare: true);
+        var sut = CreateProvider().Invoke(folder);
+
+        // Act
+        var commit = await sut.CommitAsync("main",
+            c => c.AddOrUpdate("test.txt", Encoding.UTF8.GetBytes("foo")),
+            sut.CreateCommit("Commit message",
+                            [],
+                            new("test", "test@corporate.com", DateTimeOffset.Now),
+                            new("test", "test@corporate.com", DateTimeOffset.Now)),
+            new(UpdateBranch: false));
+
+        // Assert
+        var diff = await sut.CompareAsync(null, commit.Id.ToString());
+        using (new AssertionScope())
+        {
+            diff.Should().HaveCount(1);
+            diff[0].Type.Should().Be(ChangeType.Added);
+            diff[0].NewPath!.ToString().Should().Be("test.txt");
+            var newBlob = await diff[0].New!.GetEntryAsync<BlobEntry>();
+            newBlob.GetText().Should().Be("foo");
+        }
+    }
+
     [Test]
     public async Task StageFiles()
     {
@@ -285,12 +315,12 @@ public class GitConnectionTests
         // Act
         var tip = await sut.Head.GetTipAsync();
         var commit = await sut.CommitAsync("main",
-                                           transformations,
-                                           sut.CreateCommit("Commit message",
-                                                            [tip],
-                                                            new("test", "test@corporate.com", DateTimeOffset.Now),
-                                                            new("test", "test@corporate.com", DateTimeOffset.Now)),
-                                           new(UpdateBranch: updateBranch));
+            transformations,
+            sut.CreateCommit("Commit message",
+                            [tip],
+                            new("test", "test@corporate.com", DateTimeOffset.Now),
+                            new("test", "test@corporate.com", DateTimeOffset.Now)),
+            new(UpdateBranch: updateBranch));
         return (sut, tip, commit);
     }
 

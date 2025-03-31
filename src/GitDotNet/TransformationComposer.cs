@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Abstractions;
+using System.Xml;
 using GitDotNet.Tools;
 using GitDotNet.Writers;
 
@@ -32,42 +33,44 @@ internal class TransformationComposer(string repositoryPath, FastInsertWriterFac
 
     public async Task<HashId> CommitAsync(string branch, CommitEntry commit, CommitOptions? options)
     {
-        CheckFullReferenceName(branch);
-
-        using var data = await WriteData(branch, commit);
+        var updateBranch = options?.UpdateBranch ?? true;
+        var importBranch = updateBranch ? CheckFullReferenceName(branch) : $"refs/gitdotnetfastimport/{Guid.NewGuid()}";
+        using var data = await WriteData(importBranch, commit);
         data.Seek(0, SeekOrigin.Begin);
         var markFile = GetMarkDownPath(repositoryPath, fileSystem);
         try
         {
             GitCliCommand.Execute(repositoryPath, $@"fast-import --export-marks=""{markFile}""", data);
-            const string linePrefix = ":1 ";
-            var line = File.ReadLines(markFile)
-                .FirstOrDefault(l => l.StartsWith(linePrefix, StringComparison.Ordinal)) ??
-                throw new InvalidOperationException("Could not locate commit id in fast-import mark file.");
-            var result = line[linePrefix.Length..].Trim();
-
-            if (!(options?.UpdateBranch ?? true))
-            {
-                await RevertToPreviousCommitAsync(repositoryPath, branch, commit);
-            }
-
-            return new HashId(result);
+            return new HashId(FindCommitIdInMarkFile(markFile));
         }
         finally
         {
-            fileSystem.File.Delete(markFile);
+            PostCommitCleanUp(updateBranch, importBranch, markFile);
         }
     }
 
-    private static async Task RevertToPreviousCommitAsync(string repositoryPath, string branch, CommitEntry commit)
+    private static string FindCommitIdInMarkFile(string markFile)
     {
-        var parents = await commit.GetParentsAsync();
-        GitCliCommand.Execute(repositoryPath, $@"update-ref {branch} {parents[0].Id}");
+        const string linePrefix = ":1 ";
+        var line = File.ReadLines(markFile)
+            .FirstOrDefault(l => l.StartsWith(linePrefix, StringComparison.Ordinal)) ??
+            throw new InvalidOperationException("Could not locate commit id in fast-import mark file.");
+        return line[linePrefix.Length..].Trim();
     }
 
-    private static void CheckFullReferenceName(string name)
+    private void PostCommitCleanUp(bool updateBranch, string importBranch, string markFile)
+    {
+        fileSystem.File.Delete(markFile);
+        if (!updateBranch)
+        {
+            GitCliCommand.Execute(repositoryPath, $"git branch -D {importBranch}", throwOnError: false);
+        }
+    }
+
+    private static string CheckFullReferenceName(string name)
     {
         if (!name.StartsWith("refs/")) throw new ArgumentException("Branch should use a full reference name.", nameof(name));
+        return name;
     }
 
     private async Task<PooledMemoryStream> WriteData(string branch, CommitEntry commit)
