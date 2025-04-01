@@ -70,7 +70,7 @@ public class TreeEntry : Entry
         foreach (var child in Children)
         {
             stack.Push(child.Name);
-            await child.GetAllBlobEntriesAsync(channel, func, new Stack<string>([child.Name]));
+            await child.GetAllBlobEntriesAsync(channel, func, stack);
             stack.Pop();
         }
         channel.Writer.Complete();
