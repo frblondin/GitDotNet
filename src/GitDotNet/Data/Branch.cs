@@ -67,7 +67,7 @@ public sealed class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>,
     /// <param name="commit">The parameter represents the new commit that the reference will be updated to.</param>
     [ExcludeFromCodeCoverage]
     public void UpdateRef(CommitEntry commit) =>
-        GitCliCommand.Execute(Connection.Info.Path, $"git update-ref {CanonicalName} {commit.Id}");
+        GitCliCommand.Execute(Connection.Info.Path, $"update-ref {CanonicalName} {commit.Id}");
 
     private Remote? GetRemote()
     {
