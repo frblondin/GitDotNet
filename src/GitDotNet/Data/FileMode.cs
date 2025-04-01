@@ -1,20 +1,15 @@
 namespace GitDotNet;
 
 /// <summary>Represents the file mode of a Git tree entry item.</summary>
-public record class FileMode(int Mode)
+/// <param name="Type">Gets the type of the object based on the file mode.</param>
+public record class FileMode(ObjectType Type)
 {
     /// <summary>Initializes a new instance of the <see cref="FileMode"/> class with the specified mode.</summary>
     /// <param name="mode">The file mode as an integer.</param>
-    public FileMode(string mode) : this(Convert.ToInt32(mode, 8)) { }
+    public FileMode(string mode) : this((ObjectType)Convert.ToInt32(mode, 8)) { }
 
     /// <summary>Creates a default blob mode.</summary>
-    public static FileMode DefaultBlob { get; } = new((int)ObjectType.RegularFile);
-
-    /// <summary>Creates an executable blob mode.</summary>
-    public static FileMode ExecutableBlob { get; } = new((int)ObjectType.ExecutableBlob);
-
-    /// <summary>Gets the type of the object based on the file mode.</summary>
-    public ObjectType Type => (ObjectType)Mode;
+    public static FileMode RegularFile { get; } = new(ObjectType.RegularFile);
 
     /// <summary>Gets the entry type of the object based on the file mode.</summary>
     public EntryType EntryType => Type switch
@@ -28,7 +23,7 @@ public record class FileMode(int Mode)
     };
 
     /// <inheritdoc/>
-    public override string ToString() => Convert.ToString(Mode, 8);
+    public override string ToString() => Convert.ToString((int)Type, 8);
 }
 
 /// <summary>Specifies the type of a Git tree entry item.</summary>
