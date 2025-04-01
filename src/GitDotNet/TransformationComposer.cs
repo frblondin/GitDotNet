@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Abstractions;
+using System.Text;
 using System.Xml;
 using GitDotNet.Tools;
 using GitDotNet.Writers;
@@ -15,6 +16,9 @@ internal class TransformationComposer(string repositoryPath, FastInsertWriterFac
     internal Dictionary<GitPath, (TransformationType ChangeType, Stream? Stream, FileMode? FileMode)> Changes { get; } = [];
 
     public int Count => Changes.Count;
+
+    public ITransformationComposer AddOrUpdate(GitPath path, string data, FileMode? fileMode = null) =>
+        AddOrUpdate(path, Encoding.UTF8.GetBytes(data), fileMode);
 
     public ITransformationComposer AddOrUpdate(GitPath path, byte[] data, FileMode? fileMode = null) =>
         AddOrUpdate(path, new MemoryStream(data), fileMode);
@@ -107,6 +111,13 @@ public interface ITransformationComposer
 {
     /// <summary>Gets the number of changes in the composer.</summary>
     int Count { get; }
+
+    /// <summary>Adds or updates a file in the repository with the specified path and data.</summary>
+    /// <param name="path">The path of the file to add or update.</param>
+    /// <param name="data">The data to write to the file.</param>
+    /// <param name="fileMode">The file mode of a Git tree entry item.</param>
+    /// <returns>The current instance of <see cref="ITransformationComposer"/>.</returns>
+    ITransformationComposer AddOrUpdate(GitPath path, string data, FileMode? fileMode = null);
 
     /// <summary>Adds or updates a file in the repository with the specified path and data.</summary>
     /// <param name="path">The path of the file to add or update.</param>

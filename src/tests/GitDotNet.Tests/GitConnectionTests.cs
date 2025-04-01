@@ -335,11 +335,11 @@ public class GitConnectionTests
 
         // Act
         var commit = await sut.CommitAsync("main",
-                                           c => c.AddOrUpdate("test.txt", Encoding.UTF8.GetBytes("foo")),
-                                           sut.CreateCommit("Commit message",
-                                                            [],
-                                                            new("test", "test@corporate.com", DateTimeOffset.Now),
-                                                            new("test", "test@corporate.com", DateTimeOffset.Now)));
+            c => c.AddOrUpdate("test.txt", "foo"),
+            sut.CreateCommit("Commit message",
+                            [],
+                            new("test", "test@corporate.com", DateTimeOffset.Now),
+                            new("test", "test@corporate.com", DateTimeOffset.Now)));
 
         // Assert
         using (new AssertionScope())

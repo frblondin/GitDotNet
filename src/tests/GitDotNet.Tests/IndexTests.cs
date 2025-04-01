@@ -57,7 +57,7 @@ public class IndexTests
         var sut = GitConnectionTests.CreateProvider().Invoke(folder).Index;
 
         // Act
-        sut.AddEntry(Encoding.UTF8.GetBytes("foo"), "test.txt", FileMode.DefaultBlob);
+        sut.AddEntry(Encoding.UTF8.GetBytes("foo"), "test.txt", FileMode.RegularFile);
 
         // Assert
         using (new AssertionScope())

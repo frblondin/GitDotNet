@@ -38,13 +38,14 @@ internal sealed class FastInsertWriter : IDisposable
             case TransformationComposer.TransformationType.AddOrModified:
                 ArgumentNullException.ThrowIfNull(stream);
 
-                _writer.WriteLine($"M {fileMode?.ToString() ?? "100644"} inline {path}");
-                _writer.WriteLine($"data {stream!.Length}");
-
-                // Flush the writer to ensure the stream is written at the correct position
-                _writer.Flush();
-
-                stream.CopyTo(_writer.BaseStream);
+                if (fileMode?.Type == ObjectType.GitLink)
+                {
+                    WriteGitLogAddOrModified(path, stream, fileMode);
+                }
+                else
+                {
+                    WriteRegularBlobAddOrModified(path, stream, fileMode);
+                }
                 break;
             case TransformationComposer.TransformationType.Removed:
                 _writer.WriteLine($"D {path}");
@@ -54,9 +55,30 @@ internal sealed class FastInsertWriter : IDisposable
         }
     }
 
+    private void WriteGitLogAddOrModified(GitPath path, Stream stream, FileMode fileMode)
+    {
+        _writer.Write($"M {fileMode} ");
+
+        // Flush the writer to ensure the stream is written at the correct position
+        _writer.Flush();
+
+        stream.CopyTo(_writer.BaseStream);
+        _writer.WriteLine($" {path}");
+    }
+
+    private void WriteRegularBlobAddOrModified(GitPath path, Stream stream, FileMode? fileMode)
+    {
+        _writer.WriteLine($"M {fileMode ?? FileMode.RegularFile} inline {path}");
+        _writer.WriteLine($"data {stream!.Length}");
+
+        // Flush the writer to ensure the stream is written at the correct position
+        _writer.Flush();
+
+        stream.CopyTo(_writer.BaseStream);
+    }
+
     public async Task WriteHeaderAsync(string branch, CommitEntry commit)
     {
-        await _writer.WriteLineAsync($"reset {branch}");
         await _writer.WriteLineAsync($"commit {branch}");
         await _writer.WriteLineAsync($"mark :1");
         if (commit.Author is not null) await WriteSignatureAsync("author", commit.Author);
