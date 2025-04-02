@@ -21,15 +21,19 @@ public partial class GitConnection
 
         internal void ApplyTo(ICacheEntry entry, object? value, CancellationToken token)
         {
-            if (value is null)
+            if (value is not null)
             {
-                entry.AbsoluteExpirationRelativeToNow = TimeSpan.Zero;
+                entry.SetSize(1);
+                entry.AddExpirationToken(new CancellationChangeToken(token));
+                if (SlidingCacheExpiration.HasValue)
+                {
+                    entry.SetSlidingExpiration(SlidingCacheExpiration.Value);
+                }
             }
-            entry.SetSize(1);
-            entry.AddExpirationToken(new CancellationChangeToken(token));
-            if (SlidingCacheExpiration.HasValue)
+            else
             {
-                entry.SetSlidingExpiration(SlidingCacheExpiration.Value);
+                entry.Dispose();
+                return;
             }
         }
     }

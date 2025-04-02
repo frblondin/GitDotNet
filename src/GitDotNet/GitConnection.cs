@@ -27,7 +27,7 @@ public partial class GitConnection : IDisposable
 
     internal GitConnection(string path,
                            RepositoryInfoFactory infoFactory,
-                           ObjectsFactory objectsFactory,
+                           ObjectResolverFactory objectsFactory,
                            BranchRefReaderFactory branchRefReaderFactory,
                            IndexFactory indexFactory,
                            ITreeComparer comparer,

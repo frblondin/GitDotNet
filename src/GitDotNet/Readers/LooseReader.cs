@@ -93,9 +93,9 @@ internal class LooseReader(string path, IFileSystem fileSystem)
         return objectPath;
     }
 
-    protected virtual string GetObjectFolder(string hexString) => hexString[..2];
+    protected virtual string GetObjectFolder(string hexString) => hexString.Length > 2 ? hexString[..2] : "";
 
-    protected virtual string GetFileName(string hexString) => hexString[2..];
+    protected virtual string GetFileName(string hexString) => hexString.Length > 2 ? hexString[2..] : "";
 
     private static bool AreBuffersEqual(byte[] buffer1, byte[] buffer2, int length)
     {

@@ -8,7 +8,7 @@ using System.IO.Abstractions;
 
 namespace GitDotNet;
 
-internal delegate IObjectResolver ObjectsFactory(string repositoryPath, bool useReadCommitGraph);
+internal delegate IObjectResolver ObjectResolverFactory(string repositoryPath, bool useReadCommitGraph);
 
 /// <summary>Represents a collection of Git objects in a repository.</summary>
 internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
@@ -105,11 +105,13 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     }
 
     public async Task<TEntry> GetAsync<TEntry>(HashId id) where TEntry : Entry =>
-        await GetAsync<TEntry>(id, throwIfNotFound: true);
-
-    public async Task<TEntry> GetAsync<TEntry>(HashId id, bool throwIfNotFound) where TEntry : Entry =>
         (await _memoryCache.GetOrCreateAsync((id, nameof(Entry)),
-                                             async entry => await ReadAsync<TEntry>(entry, id, throwIfNotFound)))!;
+                                             async entry => await ReadAsync<TEntry>(entry, id, true)))!;
+
+    public async Task<TEntry?> TryGetAsync<TEntry>(HashId id) where TEntry : Entry =>
+        await _memoryCache.GetOrCreateAsync((id, nameof(Entry)),
+                                            async entry => await ReadAsync<TEntry>(entry, id, false));
+
 
     private async Task<TEntry?> ReadAsync<TEntry>(ICacheEntry entry, HashId id, bool throwIfNotFound) where TEntry : Entry
     {
@@ -219,9 +221,8 @@ public interface IObjectResolver : IDisposable
 
     /// <summary>Retrieves a Git object by its hash.</summary>
     /// <param name="id">The hash of the Git object.</param>
-    /// <param name="throwIfNotFound">A value indicating whether to throw an exception if the object is not found.</param>
     /// <returns>The Git object associated with the specified hash.</returns>
-    Task<TEntry> GetAsync<TEntry>(HashId id, bool throwIfNotFound) where TEntry : Entry;
+    Task<TEntry?> TryGetAsync<TEntry>(HashId id) where TEntry : Entry;
 }
 
 internal interface IObjectResolverInternal

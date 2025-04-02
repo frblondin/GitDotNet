@@ -40,7 +40,7 @@ public sealed partial class HashId : IEquatable<HashId>, IComparable<HashId>, IC
 
     /// <summary>Returns the hash code for this instance.</summary>
     /// <returns>The hash code for this instance.</returns>
-    public override int GetHashCode() => BitConverter.ToInt32(_hash.AsSpan(0, 4));
+    public override int GetHashCode() => _hash.Length > 0 ? BitConverter.ToInt32(_hash.AsSpan(0, 4)) : 0;
 
     /// <summary>Converts a byte array to a <see cref="HashId"/>.</summary>
     /// <param name="hash">The byte array.</param>

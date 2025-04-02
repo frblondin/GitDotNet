@@ -1,5 +1,4 @@
 using System.IO.Abstractions.TestingHelpers;
-using System.IO.Compression;
 using System.Text;
 using FakeItEasy;
 using FluentAssertions;
@@ -8,6 +7,7 @@ using GitDotNet.Readers;
 using GitDotNet.Tests.Helpers;
 using GitDotNet.Tests.Properties;
 using GitDotNet.Tools;
+using static GitDotNet.Tests.Helpers.DependencyInjectionProvider;
 using static GitDotNet.Tests.Helpers.Fakes;
 
 namespace GitDotNet.Tests.Readers;
@@ -54,7 +54,7 @@ public class IndexTests
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
         TestUtils.ForceDeleteDirectory(folder);
         GitConnection.Create(folder);
-        var sut = GitConnectionTests.CreateProvider().Invoke(folder).Index;
+        var sut = CreateProvider().Invoke(folder).Index;
 
         // Act
         sut.AddEntry(Encoding.UTF8.GetBytes("foo"), "test.txt", FileMode.RegularFile);

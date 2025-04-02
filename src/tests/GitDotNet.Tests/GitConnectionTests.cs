@@ -1,4 +1,3 @@
-using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
 using System.IO.Compression;
 using System.Text;
@@ -8,8 +7,7 @@ using FluentAssertions.Execution;
 using GitDotNet.Readers;
 using GitDotNet.Tests.Helpers;
 using GitDotNet.Tests.Properties;
-using GitDotNet.Tools;
-using Microsoft.Extensions.DependencyInjection;
+using static GitDotNet.Tests.Helpers.DependencyInjectionProvider;
 using static GitDotNet.Tests.Helpers.Fakes;
 
 namespace GitDotNet.Tests;
@@ -536,42 +534,5 @@ public class GitConnectionTests
 
         // Assert
         commit.Id.ToString().Should().Be("a28d9681fdf40631632a42b303be274e3869d5d5");
-    }
-
-    internal static GitConnectionProvider CreateProvider() => CreateProvider(out var _);
-
-    internal static GitConnectionProvider CreateProvider(out ServiceProvider provider)
-    {
-        var collection = new ServiceCollection()
-            .AddMemoryCache()
-            .AddGitDotNet();
-        provider = collection.BuildServiceProvider();
-        return provider.GetRequiredService<GitConnectionProvider>();
-    }
-
-    internal static GitConnectionProvider CreateProviderUsingFakeFileSystem(ref MockFileSystem? fileSystem,
-                                                                            ConfigReader? configReader = null,
-                                                                            IObjectResolver? objectResolver = null,
-                                                                            CommitGraphReader? commitGraphReader = null)
-    {
-        fileSystem ??= new MockFileSystem().AddZipContent(Resource.CompleteRepository);
-        var captured = fileSystem;
-        var collection = new ServiceCollection()
-            .AddMemoryCache()
-            .AddGitDotNet()
-            .AddSingleton<IFileSystem>(fileSystem)
-            .AddScoped<FileOffsetStreamReaderFactory>(sp => path => captured.CreateOffsetReader(path))
-            .AddScoped<RepositoryInfoFactory>(sp => path => CreateBareInfoProvider(path, sp.GetRequiredService<ConfigReaderFactory>(), captured));
-
-        if (configReader != null)
-            collection.AddSingleton<ConfigReaderFactory>((_) => configReader);
-
-        if (objectResolver != null)
-            collection.AddSingleton<ObjectsFactory>((_, _) => objectResolver);
-
-        if (commitGraphReader != null)
-            collection.AddSingleton<CommitGraphReaderFactory>((_, _) => commitGraphReader);
-
-        return collection.BuildServiceProvider().GetRequiredService<GitConnectionProvider>();
     }
 }
