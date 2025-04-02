@@ -180,6 +180,10 @@ public partial class GitConnection : IDisposable
     public static bool IsValid(string path)
     {
         var fullPath = Path.GetFullPath(path).Replace('\\', '/');
+        if (!Directory.Exists(fullPath))
+        {
+            return false;
+        }
         var gitFolder = new GitCliCommand().GetAbsoluteGitPath(fullPath)?.Replace('\\', '/');
         return gitFolder != null &&
             (gitFolder.Equals(fullPath.ToString()) || // Bare repository

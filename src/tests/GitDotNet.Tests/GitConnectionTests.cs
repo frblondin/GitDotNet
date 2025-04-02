@@ -33,6 +33,16 @@ public class GitConnectionTests
     }
 
     [Test]
+    public void IsValidReturnsFalseForNonExistingFolder()
+    {
+        // Arrange
+        var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name, "Foo");
+
+        // Act, Assert
+        GitConnection.IsValid(folder).Should().BeFalse();
+    }
+
+    [Test]
     public void IsValidReturnsFalseForNestedPath()
     {
         // Act, Assert
