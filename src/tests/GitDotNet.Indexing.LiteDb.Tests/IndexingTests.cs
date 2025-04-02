@@ -8,7 +8,7 @@ using GitDotNet.Tests.Helpers;
 using GitDotNet.Tests.Properties;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using static GitDotNet.Tests.GitConnectionTests;
+using static GitDotNet.Tests.Helpers.DependencyInjectionProvider;
 
 namespace GitDotNet.Indexing.Realm;
 

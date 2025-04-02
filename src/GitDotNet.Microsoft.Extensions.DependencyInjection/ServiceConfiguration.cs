@@ -45,7 +45,7 @@ public static class ServiceConfiguration
         .AddScoped<GitConnectionProvider>(sp => path =>
             new(path,
                 sp.GetRequiredService<RepositoryInfoFactory>(),
-                sp.GetRequiredService<ObjectsFactory>(),
+                sp.GetRequiredService<ObjectResolverFactory>(),
                 sp.GetRequiredService<BranchRefReaderFactory>(),
                 sp.GetRequiredService<IndexFactory>(),
                 sp.GetRequiredService<ITreeComparer>(),
@@ -70,7 +70,7 @@ public static class ServiceConfiguration
                 sp.GetRequiredService<IFileSystem>()))
         .AddScoped<IndexFactory>(sp => (repositoryPath, entryProvider, locker) =>
             new(repositoryPath, entryProvider, locker, sp.GetRequiredService<IndexReaderFactory>(), sp.GetRequiredService<IFileSystem>()))
-        .AddScoped<ObjectsFactory>(sp => (path, useReadCommitGraph) =>
+        .AddScoped<ObjectResolverFactory>(sp => (path, useReadCommitGraph) =>
             new ObjectResolver(
                 path,
                 useReadCommitGraph,

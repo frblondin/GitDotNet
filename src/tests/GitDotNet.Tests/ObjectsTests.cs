@@ -1,9 +1,14 @@
+using System.IO.Abstractions.TestingHelpers;
+using System.IO.Compression;
 using FakeItEasy;
 using FluentAssertions;
+using FluentAssertions.Execution;
 using GitDotNet.Readers;
+using GitDotNet.Tests.Properties;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using System.IO.Abstractions.TestingHelpers;
+using static GitDotNet.Tests.Helpers.DependencyInjectionProvider;
 using static GitDotNet.Tests.Helpers.Fakes;
 
 namespace GitDotNet.Tests;
@@ -36,5 +41,20 @@ public class ObjectsTests
 
         // Assert
         entry.Data.Should().Equal([42]);
+    }
+
+    [Test]
+    public async Task TryGetNonExistingCommitReturnsNull()
+    {
+        // Arrange
+        var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteRepository), folder, overwriteFiles: true);
+        using var sut = CreateServiceProvider().GetRequiredService<ObjectResolverFactory>().Invoke(folder, true);
+
+        // Act
+        var commit = await sut.TryGetAsync<CommitEntry>(HashId.Empty);
+
+        // Assert
+        commit.Should().BeNull();
     }
 }
