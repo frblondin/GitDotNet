@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace GitDotNet;
 
 /// <summary>Represents a base class for different types of Git entries.</summary>
+[DebuggerDisplay("{Id,nq}")]
 public abstract class Entry : IEquatable<Entry>
 {
     internal Entry(EntryType type, HashId id, byte[] data)

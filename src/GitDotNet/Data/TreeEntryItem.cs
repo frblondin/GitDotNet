@@ -29,10 +29,6 @@ public sealed class TreeEntryItem : IEquatable<TreeEntryItem>
     /// <summary>Gets the hash of the tree entry item.</summary>
     public HashId Id { get; }
 
-    /// <summary>Gets the entry associated with the tree entry item.</summary>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public Entry Entry => AsyncHelper.RunSync(GetEntryAsync<Entry>);
-
     /// <summary>Asynchronously gets the entry associated with the tree entry item.</summary>
     /// <returns>The entry associated with the tree entry item.</returns>
     public async Task<TEntry> GetEntryAsync<TEntry>() where TEntry : Entry =>
