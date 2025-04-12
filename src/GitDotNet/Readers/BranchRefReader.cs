@@ -12,8 +12,8 @@ internal partial class BranchRefReader(GitConnection connection, IFileSystem fil
     internal IImmutableDictionary<string, Branch> GetBranches()
     {
         var branches = new SortedSet<Branch>();
-        GetBranchesFromPackedRefsFile(branches);
         GetBranchesFromRefsDirectory(branches);
+        GetBranchesFromPackedRefsFile(branches);
         return branches.ToImmutableDictionary(b => b.CanonicalName);
     }
 
@@ -32,7 +32,7 @@ internal partial class BranchRefReader(GitConnection connection, IFileSystem fil
                 {
                     var hash = new HashId(match.Groups[1].Value);
                     var canonicalName = match.Groups[2].Value;
-                    var branch = new Branch(canonicalName, connection, async () => await connection.Objects.GetAsync<CommitEntry>(hash));
+                    var branch = new Branch(canonicalName, connection, () => hash);
                     branches.Add(branch);
                 }
             }
@@ -55,7 +55,7 @@ internal partial class BranchRefReader(GitConnection connection, IFileSystem fil
             var localBranches = from path in fileSystem.Directory.GetFiles(localBranchesPath, "*", SearchOption.AllDirectories)
                                 let name = fileSystem.Path.GetRelativePath(localBranchesPath, path).Replace(Path.DirectorySeparatorChar, '/')
                                 let fullName = $"{Reference.LocalBranchPrefix}{name}"
-                                select new Branch(fullName, connection, async () => await ReadTipAsync(path));
+                                select new Branch(fullName, connection, () => ReadTip(path));
             foreach (var branch in localBranches)
             {
                 branches.Add(branch);
@@ -67,18 +67,17 @@ internal partial class BranchRefReader(GitConnection connection, IFileSystem fil
             var remoteBranches = from path in fileSystem.Directory.GetFiles(remoteBranchesPath, "*", SearchOption.AllDirectories)
                                  let name = fileSystem.Path.GetRelativePath(remoteBranchesPath, path).Replace(Path.DirectorySeparatorChar, '/')
                                  let fullName = $"{Reference.RemoteTrackingBranchPrefix}{name}"
-                                 select new Branch(fullName, connection, async () => await ReadTipAsync(path));
+                                 select new Branch(fullName, connection, () => ReadTip(path));
             foreach (var branch in remoteBranches)
             {
                 branches.Add(branch);
             }
         }
 
-        async Task<CommitEntry> ReadTipAsync(string file)
+        HashId ReadTip(string file)
         {
             var content = fileSystem.File.ReadAllText(file);
-            var id = new HashId(content.Trim('.', '\r', '\n'));
-            return await connection.Objects.GetAsync<CommitEntry>(id);
+            return new HashId(content.Trim('.', '\r', '\n'));
         }
     }
 
