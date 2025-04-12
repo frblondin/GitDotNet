@@ -5,7 +5,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
 using System.Text;
 using GitDotNet.Tools;
-using static GitDotNet.Readers.CommitGraphReader;
 
 namespace GitDotNet.Readers;
 
@@ -91,7 +90,7 @@ internal partial class CommitGraphReader : IDisposable
         return result;
     }
 
-    public CommitEntry? Get(HashId commit)
+    public LogEntry? Get(HashId commit)
     {
         foreach (var graph in _graphFiles)
         {
@@ -130,7 +129,7 @@ internal partial class CommitGraphReader : IDisposable
         throw new InvalidOperationException("Graph position out of range.");
     }
 
-    private CommitEntry ParseCommitEntry(HashId commitHash, int commitIndex, GraphFile graph)
+    private LogEntry ParseCommitEntry(HashId commitHash, int commitIndex, GraphFile graph)
     {
         using var stream = graph.Reader.OpenRead(graph.CommitDataOffset + commitIndex * (HashLength + 16));
 
@@ -159,14 +158,8 @@ internal partial class CommitGraphReader : IDisposable
         ReadFirstParent(parent1Position, parents);
         ReadExtraParents(graph, parent2Position, parents);
 
-        return new CommitEntry(commitHash,
-                               new Lazy<byte[]>(() => AsyncHelper.RunSync(GetDataAsync)),
-                               _objectResolver,
-                               treeId,
-                               parents.ToImmutable(),
-                               DateTimeOffset.FromUnixTimeSeconds(commitTime));
-
-        Task<byte[]> GetDataAsync() => ((IObjectResolverInternal)_objectResolver).GetDataAsync(commitHash);
+        return new LogEntry(commitHash, treeId, parents.ToImmutable(),
+            DateTimeOffset.FromUnixTimeSeconds(commitTime), _objectResolver);
     }
 
     private void ReadFirstParent(int parent1Position, ImmutableList<HashId>.Builder parents)

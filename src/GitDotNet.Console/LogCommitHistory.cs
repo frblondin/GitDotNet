@@ -10,14 +10,15 @@ public class LogCommitHistory(GitConnectionProvider factory) : BackgroundService
     {
         var path = InputData(RepositoryPathInput, Directory.Exists);
         using var connection = factory.Invoke(path);
-        await foreach (var commit in connection.GetLogAsync("HEAD",
-            LogOptions.Default with { SortBy = LogTraversal.FirstParentOnly | LogTraversal.Topological }))
+        await foreach (var logEntry in connection.GetLogAsync("HEAD",
+            LogOptions.Default with { Start = DateTimeOffset.Now.AddMonths(-6), SortBy = LogTraversal.FirstParentOnly }))
         {
             if (stoppingToken.IsCancellationRequested) break;
+            var commit = await logEntry.GetCommitAsync();
             var messagePreview = commit.Message.Length > 50 ?
                 string.Concat(commit.Message.AsSpan(0, 50), "...") :
                 commit.Message;
-            WriteLine($"{commit.Id} {messagePreview.ReplaceLineEndings("")}");
+            WriteLine($"{commit.Id} {logEntry.CommitTime} {messagePreview.ReplaceLineEndings("")}");
         }
         await StopAsync(stoppingToken);
     }

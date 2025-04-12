@@ -1,4 +1,4 @@
-﻿namespace GitDotNet;
+namespace GitDotNet;
 
 /// <summary>Specifies the type of a Git entry.</summary>
 public enum EntryType
@@ -19,5 +19,8 @@ public enum EntryType
     OfsDelta = 6,
 
     /// <summary>A reference delta entry.</summary>
-    RefDelta
+    RefDelta,
+
+    /// <summary>Represents a single entry in a log.</summary>
+    LogEntry,
 }

@@ -84,54 +84,63 @@ public partial class GitConnection : IDisposable
     /// <summary>Gets the commit hash for a given committish reference, handling ~ and ^ navigation.</summary>
     /// <param name="committish">The committish reference.</param>
     /// <returns>The commit hash as a byte array.</returns>
-    public async Task<CommitEntry> GetCommittishAsync(string committish)
+    public async Task<CommitEntry> GetCommittishAsync(string committish) =>
+        await GetCommittishAsync<CommitEntry>(committish, c => c.ParentIds);
+
+    internal async Task<T> GetCommittishAsync<T>(string committish, Func<T, IList<HashId>> parentProvider)
+        where T : Entry
     {
         var reference = committish;
         var matches = ChainedRelativeRefRegex().Matches(committish);
         if (matches.Count > 0)
         {
             reference = matches[0].Groups["ref"].Value;
-            var commit = await GetReferenceTipAsync(reference);
+            var commitId = GetReferenceTip(reference);
+            var commit = await Objects.GetAsync<T>(commitId);
 
             foreach (Match match in matches)
             {
                 var op = match.Groups["op"].Value;
                 var num = string.IsNullOrEmpty(match.Groups["num"].Value) ? 1 : int.Parse(match.Groups["num"].Value);
 
-                commit = await TraverseCommitAsync(commit, op, num);
+                var traversed = TraverseCommit(commitId, parentProvider(commit) , op, num);
+                if (traversed != commitId)
+                {
+                    commit = await Objects.GetAsync<T>(traversed);
+                }
             }
             return commit;
         }
         else
         {
-            return await GetReferenceTipAsync(reference);
+            var commitId = GetReferenceTip(reference);
+            return await Objects.GetAsync<T>(commitId);
         }
 
-        async Task<CommitEntry> GetReferenceTipAsync(string reference) => reference switch
+        HashId GetReferenceTip(string reference) => reference switch
         {
-            "HEAD" => await Head.GetTipAsync(),
-            _ when HashId.TryParse(reference, out var id) => await Objects.GetAsync<CommitEntry>(id),
-            _ => await Branches[reference].GetTipAsync(),
+            "HEAD" => Head.Tip ?? throw new InvalidOperationException("Head has not tip commit."),
+            _ when HashId.TryParse(reference, out var id) => id,
+            _ => Branches[reference].Tip ?? throw new InvalidOperationException($"Branch {reference} has not tip commit."),
         };
     }
 
-    private static async Task<CommitEntry> TraverseCommitAsync(CommitEntry commit, string op, int num)
+    private static HashId TraverseCommit(HashId id, IList<HashId> parents, string op, int num)
     {
+        var result = id;
         if (op == "~")
         {
             for (int i = 0; i < num; i++)
             {
-                var parents = await commit.GetParentsAsync();
-                commit = parents[0];
+                result = parents[0];
             }
         }
         else if (op == "^")
         {
-            var parents = await commit.GetParentsAsync();
-            commit = parents[num - 1];
+            result = parents[num - 1];
         }
 
-        return commit;
+        return result;
     }
 
     /// <summary>Compares two <see cref="TreeEntry"/> instances recursively.</summary>

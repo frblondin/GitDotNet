@@ -27,7 +27,7 @@ public class CreateTrainingData(GitConnectionProvider factory) : BackgroundServi
         int skippedCommits = 0;
         int commitsInError = 0;
 
-        await foreach (var commit in connection.GetLogAsync(start,
+        await foreach (var logEntry in connection.GetLogAsync(start,
             LogOptions.Default with { SortBy = LogTraversal.FirstParentOnly }))
         {
             SetCursorPosition(0, CursorTop);
@@ -36,7 +36,8 @@ public class CreateTrainingData(GitConnectionProvider factory) : BackgroundServi
             if (stoppingToken.IsCancellationRequested)
                 break;
 
-            if (commit.Parents.Any() && !exclusion.IsMatch(commit.Message))
+            var commit = await logEntry.GetCommitAsync();
+            if (logEntry.ParentIds.Any() && !exclusion.IsMatch(commit.Message))
             {
                 var patch = await GetPatch(connection, commit);
 
@@ -52,7 +53,7 @@ public class CreateTrainingData(GitConnectionProvider factory) : BackgroundServi
                     writer.RollbackJsonlObject();
 
                     SetCursorPosition(0, CursorTop);
-                    WriteLine($"Error while processing {commit.Id}: {ex.Message}.");
+                    WriteLine($"Error while processing {logEntry.Id}: {ex.Message}.");
 
                     commitsInError++;
                 }
@@ -83,7 +84,7 @@ public class CreateTrainingData(GitConnectionProvider factory) : BackgroundServi
     private static async Task<PooledMemoryStream> GetPatch(GitConnection connection, CommitEntry commit)
     {
         var result = new PooledMemoryStream();
-        await connection.CompareAsync(commit.Parents[0], commit, result, 10);
+        await connection.CompareAsync((await commit.GetParentsAsync())[0], commit, result, 10);
         result.Position = 0;
         return result;
     }

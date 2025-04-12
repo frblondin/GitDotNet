@@ -11,15 +11,15 @@ public class BlobLogCommitHistory(GitConnectionProvider factory) : BackgroundSer
         var path = InputData(RepositoryPathInput, Directory.Exists);
         using var connection = factory.Invoke(path);
         var tip = connection.Head.Tip ?? throw new NotSupportedException("Branch has no tip commit.");
-        TreeEntryItem? entry = null;
-        var root = await tip.GetRootTreeAsync();
-        var blobPath = InputData("File path in repository", path =>
-            (entry = AsyncHelper.RunSync(async () => await root.GetFromPathAsync(new GitPath(path)))) != null);
-        await foreach (var commit in connection.GetLogAsync(
+        var tipCommit = await connection.Objects.GetAsync<CommitEntry>(tip);
+        var root = await tipCommit.GetRootTreeAsync();
+        var blobPath = InputData("File path in repository");
+        await foreach (var logEntry in connection.GetLogAsync(
             "HEAD",
             LogOptions.Default with { Path = blobPath, SortBy = LogTraversal.FirstParentOnly }))
         {
             if (stoppingToken.IsCancellationRequested) break;
+            var commit = await logEntry.GetCommitAsync();
             var messagePreview = commit.Message.Length > 50 ?
                 string.Concat(commit.Message.AsSpan(0, 50), "...") :
                 commit.Message;
