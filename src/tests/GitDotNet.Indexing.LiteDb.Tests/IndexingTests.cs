@@ -32,7 +32,9 @@ public class IndexingTests
                                         services.GetRequiredService<IFileSystem>());
 
         // Act
-        var values = await (sut.SearchAsync<PageIndex>(connection.Head.Tip!, x => x.Name == "d0b04f8e-6a60-4a37-888b-64b6a62d0019")
+        var values = await (sut.SearchAsync<PageIndex>(
+            await connection.GetCommittishAsync("HEAD"),
+            x => x.Name == "d0b04f8e-6a60-4a37-888b-64b6a62d0019")
             .ToListAsync());
 
         // Assert

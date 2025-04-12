@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Collections.Specialized;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -88,6 +89,6 @@ public partial class GitConnection
         new(HashId.Empty, [], Objects)
         {
             _content = new(new CommitEntry.Content("", author ?? Info.Config.CreateSignature(), committer ?? Info.Config.CreateSignature(), [], message)),
-            Parents = parents,
+            ParentIds = parents.Select(p => p.Id).ToImmutableList(),
         };
 }

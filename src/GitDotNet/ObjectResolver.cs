@@ -1,5 +1,4 @@
 using GitDotNet.Readers;
-using GitDotNet.Tools;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using System.Collections.Immutable;
@@ -105,11 +104,11 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     }
 
     public async Task<TEntry> GetAsync<TEntry>(HashId id) where TEntry : Entry =>
-        (await _memoryCache.GetOrCreateAsync((id, nameof(Entry)),
+        (await _memoryCache.GetOrCreateAsync((id, typeof(TEntry) == typeof(LogEntry) ? nameof(LogEntry) : nameof(Entry)),
                                              async entry => await ReadAsync<TEntry>(entry, id, true)))!;
 
     public async Task<TEntry?> TryGetAsync<TEntry>(HashId id) where TEntry : Entry =>
-        await _memoryCache.GetOrCreateAsync((id, nameof(Entry)),
+        await _memoryCache.GetOrCreateAsync((id, typeof(TEntry) == typeof(LogEntry) ? nameof(LogEntry) : nameof(Entry)),
                                             async entry => await ReadAsync<TEntry>(entry, id, false));
 
 
@@ -118,11 +117,11 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(ObjectResolver));
 
         TEntry? result = null;
-        if (typeof(TEntry) == typeof(CommitEntry) && _useReadCommitGraph && _commitReader.Value is not null)
+        if (typeof(TEntry) == typeof(LogEntry))
         {
-            result = (TEntry?)(object?)_commitReader.Value.Get(id);
+            result = await ReadLogEntryAsync(id, result);
         }
-        if (result is null)
+        else
         {
             var unlinked = await GetUnlinkedEntryAsync(id, throwIfNotFound);
             result = unlinked is not null ? (TEntry)CreateEntry(unlinked) : null;
@@ -134,6 +133,28 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         {
             result.Id = id;
         }
+        return result;
+    }
+
+    private async Task<TEntry?> ReadLogEntryAsync<TEntry>(HashId id, TEntry? result) where TEntry : Entry
+    {
+        if (_useReadCommitGraph && _commitReader.Value is not null)
+        {
+            result = (TEntry?)(object?)_commitReader.Value.Get(id);
+        }
+        if (result is null)
+        {
+            var commit = await TryGetAsync<CommitEntry>(id);
+            if (commit is not null)
+            {
+                var signature = commit.Committer ??
+                    commit.Author ??
+                    throw new InvalidOperationException("No signature could be found.");
+                result = (TEntry?)(object?)new LogEntry(commit.Id, commit.RootTree,
+                    commit.ParentIds, signature.Timestamp, this);
+            }
+        }
+
         return result;
     }
 

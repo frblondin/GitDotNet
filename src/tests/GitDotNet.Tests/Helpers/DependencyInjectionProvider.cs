@@ -20,7 +20,6 @@ internal static class DependencyInjectionProvider
     internal static ServiceProvider CreateServiceProvider(IFileSystem? fileSystem = null,
         ConfigReader? configReader = null,
         IObjectResolver? objectResolver = null,
-        CommitGraphReader? commitGraphReader = null,
         FileOffsetStreamReaderFactory? offsetStreamReaderFactory = null,
         Func<IServiceProvider, RepositoryInfoFactory>? repositoryInfoFactory = null)
     {
@@ -34,8 +33,6 @@ internal static class DependencyInjectionProvider
             collection.AddSingleton<ConfigReaderFactory>((_) => configReader);
         if (objectResolver != null)
             collection.AddSingleton<ObjectResolverFactory>((_, _) => objectResolver);
-        if (commitGraphReader != null)
-            collection.AddSingleton<CommitGraphReaderFactory>((_, _) => commitGraphReader);
         if (offsetStreamReaderFactory != null)
             collection.AddSingleton(offsetStreamReaderFactory);
         if (repositoryInfoFactory != null)
@@ -46,12 +43,11 @@ internal static class DependencyInjectionProvider
 
     internal static GitConnectionProvider CreateProviderUsingFakeFileSystem(ref MockFileSystem? fileSystem,
         ConfigReader? configReader = null,
-        IObjectResolver? objectResolver = null,
-        CommitGraphReader? commitGraphReader = null)
+        IObjectResolver? objectResolver = null)
     {
         fileSystem ??= new MockFileSystem().AddZipContent(Resource.CompleteRepository);
         var captured = fileSystem;
-        var serviceProvider = CreateServiceProvider(fileSystem, configReader, objectResolver, commitGraphReader,
+        var serviceProvider = CreateServiceProvider(fileSystem, configReader, objectResolver,
             captured.CreateOffsetReader,
             sp => path => CreateBareInfoProvider(path, sp.GetRequiredService<ConfigReaderFactory>(), captured));
 

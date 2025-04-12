@@ -13,34 +13,19 @@ public class CommitEntry : Entry
     private const string PendingReading = "<pending reading>";
 
     private readonly IObjectResolver _objectResolver;
-    private readonly Lazy<byte[]> _data;
     internal Lazy<Content> _content;
     private readonly HashId? _treeId;
     private TreeEntry? _tree;
     internal IList<HashId>? _parentIds;
-    private readonly DateTimeOffset? _commitTime;
     private IList<CommitEntry>? _parents;
 
     internal CommitEntry(HashId id, byte[] data, IObjectResolver objectResolver, HashId? treeId = null)
-        : this(id, new Lazy<byte[]>(() => data), objectResolver, treeId)
-    {
-    }
-
-    internal CommitEntry(HashId id, Lazy<byte[]> data, IObjectResolver objectResolver, HashId? treeId = null, IList<HashId>? parents = null, DateTimeOffset? commitTime = null)
-        : base(EntryType.Commit, id, [])
+        : base(EntryType.Commit, id, data)
     {
         _content = new(Parse);
-        _data = data;
         _objectResolver = objectResolver;
         _treeId = treeId;
-        _parentIds = parents;
-        _commitTime = commitTime;
     }
-
-    /// <inheritdoc/>
-    [ExcludeFromCodeCoverage]
-    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
-    protected internal override byte[] Data => _data.Value;
 
     /// <summary>Gets the author of the commit.</summary>
     public Signature? Author => _content.Value.Author;
@@ -48,23 +33,21 @@ public class CommitEntry : Entry
     /// <summary>Gets the committer of the commit.</summary>
     public Signature? Committer => _content.Value.Committer;
 
-    internal DateTimeOffset? CommitTime => _commitTime ?? Committer?.Timestamp;
-
     /// <summary>Gets the commit message.</summary>
     public string Message => _content.Value.Message;
 
     /// <summary>Gets the tree entry associated with the commit.</summary>
-    [ExcludeFromCodeCoverage]
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public TreeEntry? RootTree => AsyncHelper.RunSync(GetRootTreeAsync);
+    public HashId RootTree => _treeId ?? new(_content.Value.Tree);
 
     /// <summary>Gets the parent commits of the current commit.</summary>
-    [ExcludeFromCodeCoverage]
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public IList<CommitEntry> Parents
+    public IList<HashId> ParentIds
     {
-        get => AsyncHelper.RunSync(GetParentsAsync);
-        init => _parents = value;
+        get => _parentIds ?? _content.Value.Parents;
+        init
+        {
+            _parentIds = value;
+            _parents = null; // GetParentsAsync will renew property value
+        }
     }
 
     /// <summary>Asynchronously gets the tree entry associated with the commit.</summary>
@@ -184,8 +167,8 @@ public class CommitEntry : Entry
             builder.Append("ParentIds = ").Append(PendingReading).Append(", ");
         }
         builder.Append("Author = ").Append(_content.IsValueCreated ? _content.Value.Author : PendingReading).Append(", ");
-        builder.Append("Committer = ").Append(_content.IsValueCreated ? _content.Value.Committer : PendingReading);
-        builder.Append("Data = ").Append(_data.IsValueCreated ? $"{_data.Value.Length} bytes" : PendingReading).Append(", ");
+        builder.Append("Committer = ").Append(_content.IsValueCreated ? _content.Value.Committer : PendingReading).Append(", ");
+        builder.Append("Data = ").Append(Data.Length).Append(" bytes, ");
         return true;
     }
 

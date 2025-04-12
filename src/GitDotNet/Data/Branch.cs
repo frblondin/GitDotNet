@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.Immutable;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using GitDotNet.Readers;
@@ -9,11 +8,11 @@ using GitDotNet.Tools;
 namespace GitDotNet;
 
 /// <summary>Represents a Git branch.</summary>
-public sealed class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>, IEquatable<Branch>
+public sealed class Branch : IAsyncEnumerable<LogEntry>, IComparable<Branch>, IEquatable<Branch>
 {
-    private readonly Func<Task<CommitEntry>> _tipProvider;
+    private readonly Func<HashId> _tipProvider;
 
-    internal Branch(string canonicalName, GitConnection connection, Func<Task<CommitEntry>> tipProvider)
+    internal Branch(string canonicalName, GitConnection connection, Func<HashId> tipProvider)
     {
         CanonicalName = canonicalName;
         Connection = connection;
@@ -39,26 +38,24 @@ public sealed class Branch : IAsyncEnumerable<CommitEntry>, IComparable<Branch>,
         null;
 
     /// <summary>Gets the tip commit of the branch.</summary>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    [ExcludeFromCodeCoverage]
-    public CommitEntry? Tip => AsyncHelper.RunSync(GetTipAsync);
+    public HashId? Tip => _tipProvider();
 
     /// <summary>Returns an enumerator that iterates asynchronously through the commits in the branch.</summary>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the asynchronous operation.</param>
     /// <returns>An enumerator that can be used to iterate through the commits in the branch.</returns>
     [ExcludeFromCodeCoverage]
-    public IAsyncEnumerator<CommitEntry> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+    public IAsyncEnumerator<LogEntry> GetAsyncEnumerator(CancellationToken cancellationToken = default)
     {
         var tip = Tip;
         if (tip is null)
         {
             throw new InvalidOperationException("Branch tip is null.");
         }
-        return Connection.GetLogAsync(tip.Id.ToString()).GetAsyncEnumerator(cancellationToken);
+        return Connection.GetLogAsync(tip.ToString()).GetAsyncEnumerator(cancellationToken);
     }
 
     /// <summary>Gets the tip commit of the branch.</summary>
-    public async Task<CommitEntry> GetTipAsync() => await _tipProvider();
+    public async Task<CommitEntry> GetTipAsync() => await Connection.Objects.GetAsync<CommitEntry>(_tipProvider());
 
     /// <summary>
     /// Updates a reference in the Git repository to point to a new commit. This operation modifies the reference to the

@@ -78,7 +78,7 @@ public class GitConnectionTests
         using (new AssertionScope())
         {
             sut.Info.Config.IsBare.Should().BeTrue();
-            sut.Head.Tip!.Id.ToString().Should().Be("b2cb7f24a9a18e72d359ae47fb15dde6b8559d51");
+            sut.Head.Tip!.ToString().Should().Be("b2cb7f24a9a18e72d359ae47fb15dde6b8559d51");
         }
     }
 
@@ -371,7 +371,7 @@ public class GitConnectionTests
         using var sut = CreateProvider().Invoke($"{folder}/.git");
 
         // Act
-        var commits = await sut.GetLogAsync("HEAD", LogOptions.Default with
+        var log = await sut.GetLogAsync("HEAD", LogOptions.Default with
         {
             SortBy = LogTraversal.FirstParentOnly | LogTraversal.Topological,
             ExcludeReachableFrom = "fee84b5575de791d1ac1edb089a63ab85d504f3c",
@@ -380,8 +380,9 @@ public class GitConnectionTests
         // Assert
         using (new AssertionScope())
         {
-            commits.Should().HaveCount(1);
-            commits[0].Message.Should().Be("message2efc0543-4f74-4401-83e3-dd5b66ec2016");
+            log.Should().HaveCount(1);
+            var commit = await log[0].GetCommitAsync();
+            commit.Message.Should().Be("message2efc0543-4f74-4401-83e3-dd5b66ec2016");
         }
     }
 
@@ -394,7 +395,7 @@ public class GitConnectionTests
         using var sut = CreateProvider().Invoke($"{folder}/.git");
 
         // Act
-        var commits = await sut.GetLogAsync("HEAD", LogOptions.Default with
+        var log = await sut.GetLogAsync("HEAD", LogOptions.Default with
         {
             SortBy = LogTraversal.Time,
             ExcludeReachableFrom = "de2877f9d577ee1efc6d770bdc37079ef293d946",
@@ -403,10 +404,10 @@ public class GitConnectionTests
         // Assert
         using (new AssertionScope())
         {
-            commits.Should().HaveCount(3);
-            commits[0].Id.ToString().Should().Be("2e18708dc062f5d1c9f94e82b39081f9bdc17d82");
-            commits[1].Id.ToString().Should().Be("57e779b92132f469060e6aaf2c5d61bb687e5c09");
-            commits[2].Id.ToString().Should().Be("e159d393542c45cb945e892d6245fb9647e9df73");
+            log.Should().HaveCount(3);
+            log[0].Id.ToString().Should().Be("2e18708dc062f5d1c9f94e82b39081f9bdc17d82");
+            log[1].Id.ToString().Should().Be("57e779b92132f469060e6aaf2c5d61bb687e5c09");
+            log[2].Id.ToString().Should().Be("e159d393542c45cb945e892d6245fb9647e9df73");
         }
     }
 
@@ -419,17 +420,16 @@ public class GitConnectionTests
         using var sut = CreateProvider().Invoke($"{folder}/.git");
 
         // Act
-        var root = await sut.Head.Tip.GetRootTreeAsync();
-        var commits = await sut.GetLogAsync("HEAD", LogOptions.Default with { Path = "bar.txt", SortBy = LogTraversal.FirstParentOnly })
+        var log = await sut.GetLogAsync("HEAD", LogOptions.Default with { Path = "bar.txt", SortBy = LogTraversal.FirstParentOnly })
             .ToListAsync();
 
         // Assert
         using (new AssertionScope())
         {
-            commits.Should().HaveCount(3);
-            commits[0].Id.ToString().Should().Be("b2cb7f24a9a18e72d359ae47fb15dde6b8559d51");
-            commits[1].Id.ToString().Should().Be("499d54ed291b2f8ec13301b0985b11723855ab50");
-            commits[2].Id.ToString().Should().Be("b71d400cba4ad7f9b7e6ad0e570b2cedbe0b181e");
+            log.Should().HaveCount(3);
+            log[0].Id.ToString().Should().Be("b2cb7f24a9a18e72d359ae47fb15dde6b8559d51");
+            log[1].Id.ToString().Should().Be("499d54ed291b2f8ec13301b0985b11723855ab50");
+            log[2].Id.ToString().Should().Be("b71d400cba4ad7f9b7e6ad0e570b2cedbe0b181e");
         }
     }
 
@@ -442,16 +442,16 @@ public class GitConnectionTests
         using var sut = CreateProvider().Invoke($"{folder}/.git");
 
         // Act
-        var commits = await sut.GetLogAsync("HEAD", LogOptions.Default)
+        var log = await sut.GetLogAsync("HEAD", LogOptions.Default)
             .Take(2)
             .ToListAsync();
 
         // Assert
         using (new AssertionScope())
         {
-            commits.Should().HaveCount(2);
-            commits[0].Message.Should().Be("message2efc0543-4f74-4401-83e3-dd5b66ec2016");
-            commits[1].Message.Should().Be("20c4b2e9-c474-481a-88d1-e60d297d1edb");
+            log.Should().HaveCount(2);
+            (await log[0].GetCommitAsync()).Message.Should().Be("message2efc0543-4f74-4401-83e3-dd5b66ec2016");
+            (await log[1].GetCommitAsync()).Message.Should().Be("20c4b2e9-c474-481a-88d1-e60d297d1edb");
         }
     }
 
@@ -504,8 +504,8 @@ public class GitConnectionTests
         using var sut = CreateProvider().Invoke($"{folder}/.git");
 
         // Act
-        var tip = sut.Head.Tip!;
-        var root = await tip.GetRootTreeAsync();
+        var commit = await sut.GetCommittishAsync("HEAD");
+        var root = await commit.GetRootTreeAsync();
         var blob = await root.GetFromPathAsync("Applications/ss04fto6lzk5/ss04fto6lzk5.json");
 
         // Assert
@@ -517,20 +517,20 @@ public class GitConnectionTests
     {
         // Arrange
         var fileSystem = new MockFileSystem();
+        var tip = new HashId("36010d7f7c4503ff54ba5989cbb0404ae989b5e7");
         fileSystem.AddFile(".git/HEAD", new MockFileData("ref: main"));
-        fileSystem.AddFile(".git/refs/heads/main", new MockFileData("36010d7f7c4503ff54ba5989cbb0404ae989b5e7."));
+        fileSystem.AddFile(".git/refs/heads/main", new MockFileData($"{tip}."));
         fileSystem.AddFile(".git/objects/info/commit-graph", new MockFileData(Resource.MultiParentMergeCommitGraph));
         var configReader = A.Fake<ConfigReader>(o => o.ConfigureFake(f =>
             A.CallTo(() => f.UseCommitGraph).Returns(true)));
-        using var objectResolver = CreateObjectResolver(id => new CommitEntry(id, [], null!));
-        using var graphReader = CommitGraphReader.Load(".git/objects",
-                                                       objectResolver,
-                                                       fileSystem,
-                                                       p => fileSystem.CreateOffsetReader(p))!;
-        using var connection = CreateProviderUsingFakeFileSystem(ref fileSystem, configReader, commitGraphReader: graphReader).Invoke(".git");
+        var graphReader = default(CommitGraphReader);
+        using var objectResolver = CreateObjectResolver(id => graphReader!.Get(id)!);
+        graphReader = CommitGraphReader.Load(".git/objects", objectResolver, fileSystem,
+            p => fileSystem.CreateOffsetReader(p))!;
+        using var connection = CreateProviderUsingFakeFileSystem(ref fileSystem, configReader, objectResolver).Invoke(".git");
 
         // Act
-        var commit = await connection.GetCommittishAsync("HEAD^3");
+        var commit = await connection.GetCommittishAsync<LogEntry>("HEAD^3", e => e.ParentIds);
 
         // Assert
         commit.Id.ToString().Should().Be("a28d9681fdf40631632a42b303be274e3869d5d5");
