@@ -153,34 +153,21 @@ public partial class GitConnection : IDisposable
     /// <summary>Compares two <see cref="CommitEntry"/> instances by comparing their associated tree entries.</summary>
     /// <param name="old">The old <see cref="CommitEntry"/> instance.</param>
     /// <param name="new">The new <see cref="CommitEntry"/> instance.</param>
-    /// <param name="patch">The stream to write the patch to.</param>
-    /// <param name="unified">Generate diffs with n lines of context.</param>
-    /// <param name="indentedHunkStart">The regular expression to match the start of an indented hunk.</param>
-    /// <returns></returns>
-    public virtual async Task<IList<Change>> CompareAsync(CommitEntry? old, CommitEntry @new, Stream? patch = null, int unified = GitPatchCreator.DefaultUnified, Regex? indentedHunkStart = null)
+    public virtual async Task<IList<Change>> CompareAsync(CommitEntry? old, CommitEntry @new)
     {
         var oldTree = old != null ? await old.GetRootTreeAsync() : null;
         var newTree = await @new.GetRootTreeAsync();
-        var result = await CompareAsync(oldTree, newTree);
-        if (patch is not null)
-        {
-            var patchCreator = new GitPatchCreator(unified, indentedHunkStart);
-            await patchCreator.CreatePatchAsync(patch, old, @new, result);
-        }
-        return result;
+        return await CompareAsync(oldTree, newTree);
     }
 
     /// <summary>Compares two commit references by comparing their associated commit entries.</summary>
     /// <param name="old">The old reference.</param>
     /// <param name="new">The new reference.</param>
-    /// <param name="patch">The stream to write the patch to.</param>
-    /// <param name="unified">Generate diffs with n lines of context.</param>
-    /// <returns></returns>
-    public virtual async Task<IList<Change>> CompareAsync(string? old, string @new, Stream? patch = null, int unified = GitPatchCreator.DefaultUnified)
+    public virtual async Task<IList<Change>> CompareAsync(string? old, string @new)
     {
         var oldCommit = old != null ? await GetCommittishAsync(old) : null;
         var newCommit = await GetCommittishAsync(@new);
-        return await CompareAsync(oldCommit, newCommit, patch, unified);
+        return await CompareAsync(oldCommit, newCommit);
     }
 
     /// <summary>Determines whether the specified path is a valid Git repository.</summary>

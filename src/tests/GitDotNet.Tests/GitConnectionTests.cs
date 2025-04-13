@@ -7,6 +7,7 @@ using FluentAssertions.Execution;
 using GitDotNet.Readers;
 using GitDotNet.Tests.Helpers;
 using GitDotNet.Tests.Properties;
+using GitDotNet.Tools;
 using static GitDotNet.Tests.Helpers.DependencyInjectionProvider;
 using static GitDotNet.Tests.Helpers.Fakes;
 
@@ -157,8 +158,11 @@ public class GitConnectionTests
             c => c.AddOrUpdate("test.txt", Encoding.UTF8.GetBytes("foo")));
 
         // Assert
+        var start = await sut.GetCommittishAsync("HEAD~1");
+        var end = await sut.GetCommittishAsync("HEAD");
+        var diff = await sut.CompareAsync(start, end);
         var patch = new MemoryStream();
-        var diff = await sut.CompareAsync("HEAD~1", "HEAD", patch);
+        await new GitPatchCreator().WriteAsync(patch, start, end, diff);
         using (new AssertionScope())
         {
             tip = await sut.Head.GetTipAsync();
@@ -183,8 +187,11 @@ public class GitConnectionTests
             c => c.Remove("Applications/ss04fto6lzk5/ss04fto6lzk5.json"));
 
         // Assert
+        var start = await sut.GetCommittishAsync("HEAD~1");
+        var end = await sut.GetCommittishAsync("HEAD");
+        var diff = await sut.CompareAsync(start, end);
         var patch = new MemoryStream();
-        var diff = await sut.CompareAsync("HEAD~1", "HEAD", patch);
+        await new GitPatchCreator().WriteAsync(patch, start, end, diff);
         using (new AssertionScope())
         {
             tip = await sut.Head.GetTipAsync();

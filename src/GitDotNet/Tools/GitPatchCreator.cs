@@ -5,11 +5,24 @@ using Hunk = System.Collections.Generic.List<(string Prefix, string Data)>;
 
 namespace GitDotNet.Tools;
 
-internal partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnified, Regex? indentedHunkStart = null)
+/// <summary>
+/// Creates a Git patch asynchronously, writing to a specified stream with details about changes between commits.
+/// </summary>
+/// <param name="unified">Specifies the number of context lines to include around changes in the patch.</param>
+/// <param name="indentedHunkStart">Defines a regex pattern to identify the start of indented hunks in the patch.</param>
+public partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnified, Regex? indentedHunkStart = null)
 {
     internal const int DefaultUnified = 3;
 
-    public async Task CreatePatchAsync(Stream stream, CommitEntry? start, CommitEntry end, IList<Change> changes)
+    /// <summary>
+    /// Creates a patch asynchronously by writing to a provided stream, using specified commit entries and changes.
+    /// </summary>
+    /// <param name="stream">The output destination for the patch data being generated.</param>
+    /// <param name="start">Represents the starting commit entry for the patch creation process.</param>
+    /// <param name="end">Indicates the ending commit entry for the patch creation process.</param>
+    /// <param name="changes">Contains a list of changes that will be included in the patch.</param>
+    /// <returns>This method does not return a value.</returns>
+    public async Task WriteAsync(Stream stream, CommitEntry? start, CommitEntry end, IList<Change> changes)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(unified, 2);
 
