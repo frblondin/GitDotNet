@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using GitDotNet.Tools;
 
 namespace GitDotNet;
@@ -7,10 +8,12 @@ public partial class GitConnection
     /// <summary>Gets the log of commits from the specified reference.</summary>
     /// <param name="committish">The reference to start from.</param>
     /// <param name="options">The options for the log.</param>
+    /// <param name="token">The cancellation token.</param>
     /// <returns>An asynchronous enumerable of commit entries.</returns>
-    public IAsyncEnumerable<LogEntry> GetLogAsync(string committish, LogOptions? options = null)
+    public IAsyncEnumerable<LogEntry> GetLogAsync(string committish, LogOptions? options = null,
+        CancellationToken token = default)
     {
-        var result = GetChildFirstLogAsync(committish, options);
+        var result = GetChildFirstLogAsync(committish, options, token);
         if (options?.SortBy.HasFlag(LogTraversal.Topological) ?? false)
         {
             result = result.Reverse();
@@ -18,7 +21,8 @@ public partial class GitConnection
         return result;
     }
 
-    private async IAsyncEnumerable<LogEntry> GetChildFirstLogAsync(string committish, LogOptions? options = null)
+    private async IAsyncEnumerable<LogEntry> GetChildFirstLogAsync(string committish, LogOptions? options = null,
+        [EnumeratorCancellation] CancellationToken token = default)
     {
         options ??= LogOptions.Default;
 
@@ -35,7 +39,9 @@ public partial class GitConnection
 
         HashId? lastEntryId = null;
         while (commitsToProcess.Count > 0)
-        {   
+        {
+            token.ThrowIfCancellationRequested();
+
             var currentCommit = commitsToProcess.Dequeue();
 
             if (options.Start.HasValue && currentCommit.CommitTime < options.Start.Value) continue;
