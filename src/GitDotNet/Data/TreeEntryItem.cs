@@ -122,11 +122,15 @@ public sealed class TreeEntryItem : IEquatable<TreeEntryItem>
     }
 
     /// <inheritdoc/>
-    public bool Equals(TreeEntryItem? other) => other is not null && Id.Equals(other.Id);
+    public bool Equals(TreeEntryItem? other) =>
+        other is not null &&
+        Id.Equals(other.Id) &&
+        Name.Equals(other.Name, StringComparison.Ordinal) &&
+        Mode.Equals(other.Mode);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as TreeEntryItem);
 
     /// <inheritdoc/>
-    public override int GetHashCode() => Id.GetHashCode();
+    public override int GetHashCode() => HashCode.Combine(Id, Name, Mode);
 }
