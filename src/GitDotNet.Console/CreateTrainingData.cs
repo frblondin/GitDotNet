@@ -8,7 +8,7 @@ using static System.Console;
 
 namespace GitDotNet.Console;
 
-public class CreateTrainingData(GitConnectionProvider factory) : BackgroundService
+public partial class CreateTrainingData(GitConnectionProvider factory) : BackgroundService
 {
     private const string SystemMessage = "You are a coding assistant. You transform git patches and documentation into complete code implementations.";
     private const string AssistantMessage = "[Expected full code implementation based on the patch]";
@@ -20,26 +20,36 @@ public class CreateTrainingData(GitConnectionProvider factory) : BackgroundServi
         var exclusion = new Regex(InputData(@"Exclusion list", @default: "(fix\\:|\\[BUG\\]|Merge)"), RegexOptions.IgnoreCase | RegexOptions.Compiled);
         var start = InputData(@"Start", @default: "HEAD");
         using var connection = factory.Invoke(path);
+        var rootFolder = connection.Info.GetRepositoryPath(path);
         using var stream = File.Open(file, System.IO.FileMode.Create, FileAccess.Write, FileShare.Read);
         using var writer = new Utf8JsonlWriter(stream);
 
-        int addedCommits = 0;
-        int skippedCommits = 0;
-        int commitsInError = 0;
+        int total = 0, addedCommits = 0, skippedCommits = 0, noInterestingFiles = 0, commitsInError = 0;
 
         await foreach (var logEntry in connection.GetLogAsync(start,
-            LogOptions.Default with { SortBy = LogTraversal.FirstParentOnly }))
+            LogOptions.Default with { SortBy = LogTraversal.FirstParentOnly, Start = DateTimeOffset.Now.AddYears(-1) })
+            .WithCancellation(stoppingToken))
         {
             SetCursorPosition(0, CursorTop);
-            Write($"Added commits: {addedCommits}, Excluded commits: {skippedCommits}, Commits in error: {commitsInError}");
+            Write($"Total processed: {total}, Added commits: {addedCommits}, Excluded commits: {skippedCommits}, No interesting files: {noInterestingFiles}, Commits in error: {commitsInError}");
 
-            if (stoppingToken.IsCancellationRequested)
-                break;
-
+            total++;
             var commit = await logEntry.GetCommitAsync();
             if (logEntry.ParentIds.Any() && !exclusion.IsMatch(commit.Message))
             {
-                var patch = await GetPatch(connection, commit);
+                var parents = await commit.GetParentsAsync();
+                var changes = (await connection.CompareAsync(parents[0], commit))
+                    .Where(c => rootFolder.Contains(c.NewPath ?? c.OldPath!))
+                    .ToList();
+                if (changes.Count == 0)
+                {
+                    noInterestingFiles++;
+                    continue;
+                }
+
+                var patch = new PooledMemoryStream();
+                await new GitPatchCreator(20, TypeOrMemberDefinitionStartRegex()).WriteAsync(patch, parents[0], commit, changes);
+                patch.Position = 0;
 
                 try
                 {
@@ -81,13 +91,8 @@ public class CreateTrainingData(GitConnectionProvider factory) : BackgroundServi
 
     }
 
-    private static async Task<PooledMemoryStream> GetPatch(GitConnection connection, CommitEntry commit)
-    {
-        var result = new PooledMemoryStream();
-        await connection.CompareAsync((await commit.GetParentsAsync())[0], commit, result, 10);
-        result.Position = 0;
-        return result;
-    }
+    [GeneratedRegex(@"^\s*\b(public|private|protected|internal)\s+")]
+    private static partial Regex TypeOrMemberDefinitionStartRegex();
 
     private static void WriteMessage(Utf8JsonWriter writer, string role, string content)
     {

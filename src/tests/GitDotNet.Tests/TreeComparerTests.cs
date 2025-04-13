@@ -105,10 +105,10 @@ internal class TreeComparerTests
     {
         // Arrange: folder/blob.txt renamed to folder/renamedBlob.txt
         var oldBlobEntry = new BlobEntry(oldBlob,
-                                         Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat("0", 100))),
+                                         Encoding.UTF8.GetBytes(string.Join("\n", Enumerable.Range(0, 100))),
                                          _ => throw new NotImplementedException());
         var newBlobEntry = new BlobEntry(newBlob,
-                                         Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat("0", 105))),
+                                         Encoding.UTF8.GetBytes(string.Join("\n", Enumerable.Range(0, 105))),
                                          _ => throw new NotImplementedException());
         var old = new TreeEntry(oldTreeRoot, CreateNestedItemData("40000", "folder", oldTreeItem),
             CreateObjectResolver(_ => new TreeEntry(oldTreeItem, CreateNestedItemData("100644", "blob.txt", oldBlob),
