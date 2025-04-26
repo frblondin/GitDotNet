@@ -32,7 +32,7 @@ internal static class DependencyInjectionProvider
         if (configReader != null)
             collection.AddSingleton<ConfigReaderFactory>((_) => configReader);
         if (objectResolver != null)
-            collection.AddSingleton<ObjectResolverFactory>((_, _) => objectResolver);
+            collection.AddSingleton<ObjectResolverFactory>((_, _, _) => objectResolver);
         if (offsetStreamReaderFactory != null)
             collection.AddSingleton(offsetStreamReaderFactory);
         if (repositoryInfoFactory != null)

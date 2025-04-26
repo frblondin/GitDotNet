@@ -63,7 +63,7 @@ public class GitConnectionTests
     }
 
     [Test]
-    public async Task Clone()
+    public void Clone()
     {
         // Arrange
         var source = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
@@ -125,16 +125,15 @@ public class GitConnectionTests
     }
 
     [Test]
-    public async Task LocksRepository()
+    public void LocksRepository()
     {
         // Arrange & Act
         var fileSystem = default(MockFileSystem);
-        using (CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git"))
+        using (CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git", isWrite: true))
         {
             // Assert
             fileSystem!.FileExists(".git/index.lock").Should().BeTrue();
         }
-        await Task.CompletedTask;
     }
 
     [Test]
@@ -142,7 +141,7 @@ public class GitConnectionTests
     {
         // Arrange & Act
         var fileSystem = default(MockFileSystem);
-        using (CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git"))
+        using (CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git", isWrite: true))
         {
         }
 
@@ -157,24 +156,27 @@ public class GitConnectionTests
         var (sut, tip, commit) = await CreateCommitWithTransformation(
             c => c.AddOrUpdate("test.txt", Encoding.UTF8.GetBytes("foo")));
 
-        // Assert
-        var start = await sut.GetCommittishAsync("HEAD~1");
-        var end = await sut.GetCommittishAsync("HEAD");
-        var diff = await sut.CompareAsync(start, end);
-        var patch = new MemoryStream();
-        await new GitPatchCreator().WriteAsync(patch, start, end, diff);
-        using (new AssertionScope())
+        using (sut)
         {
-            tip = await sut.Head.GetTipAsync();
-            tip.Id.Should().Be(commit.Id);
-            diff.Should().HaveCount(1);
-            diff[0].Type.Should().Be(ChangeType.Added);
-            diff[0].NewPath!.ToString().Should().Be("test.txt");
-            var newBlob = await diff[0].New!.GetEntryAsync<BlobEntry>();
-            newBlob.GetText().Should().Be("foo");
-            patch.Position = 0;
-            new StreamReader(patch).ReadToEnd().Should().Contain(
-                $" 1 insertion(+)\n\n--- a/dev/null\n+++ b/test.txt\nindex 1aad9b5..{commit.Id.ToString()[..7]} 100644\n@@ -1,1 +1,1 @@\n+foo\n");
+            // Assert
+            var start = await sut.GetCommittishAsync("HEAD~1");
+            var end = await sut.GetCommittishAsync("HEAD");
+            var diff = await sut.CompareAsync(start, end);
+            var patch = new MemoryStream();
+            await new GitPatchCreator().WriteAsync(patch, start, end, diff);
+            using (new AssertionScope())
+            {
+                tip = await sut.Head.GetTipAsync();
+                tip.Id.Should().Be(commit.Id);
+                diff.Should().HaveCount(1);
+                diff[0].Type.Should().Be(ChangeType.Added);
+                diff[0].NewPath!.ToString().Should().Be("test.txt");
+                var newBlob = await diff[0].New!.GetEntryAsync<BlobEntry>();
+                newBlob.GetText().Should().Be("foo");
+                patch.Position = 0;
+                new StreamReader(patch).ReadToEnd().Should().Contain(
+                    $" 1 insertion(+)\n\n--- a/dev/null\n+++ b/test.txt\nindex 1aad9b5..{commit.Id.ToString()[..7]} 100644\n@@ -1,1 +1,1 @@\n+foo\n");
+            }
         }
     }
 
@@ -186,22 +188,25 @@ public class GitConnectionTests
         var (sut, tip, commit) = await CreateCommitWithTransformation(
             c => c.Remove("Applications/ss04fto6lzk5/ss04fto6lzk5.json"));
 
-        // Assert
-        var start = await sut.GetCommittishAsync("HEAD~1");
-        var end = await sut.GetCommittishAsync("HEAD");
-        var diff = await sut.CompareAsync(start, end);
-        var patch = new MemoryStream();
-        await new GitPatchCreator().WriteAsync(patch, start, end, diff);
-        using (new AssertionScope())
+        using (sut)
         {
-            tip = await sut.Head.GetTipAsync();
-            tip.Id.Should().Be(commit.Id);
-            diff.Should().HaveCount(1);
-            diff[0].Type.Should().Be(ChangeType.Removed);
-            diff[0].OldPath!.ToString().Should().Be("Applications/ss04fto6lzk5/ss04fto6lzk5.json");
-            patch.Position = 0;
-            new StreamReader(patch).ReadToEnd().Should().Contain(
-                $" 1 deletion(-)\n\n--- a/Applications/ss04fto6lzk5/ss04fto6lzk5.json\n+++ b/dev/null");
+            // Assert
+            var start = await sut.GetCommittishAsync("HEAD~1");
+            var end = await sut.GetCommittishAsync("HEAD");
+            var diff = await sut.CompareAsync(start, end);
+            var patch = new MemoryStream();
+            await new GitPatchCreator().WriteAsync(patch, start, end, diff);
+            using (new AssertionScope())
+            {
+                tip = await sut.Head.GetTipAsync();
+                tip.Id.Should().Be(commit.Id);
+                diff.Should().HaveCount(1);
+                diff[0].Type.Should().Be(ChangeType.Removed);
+                diff[0].OldPath!.ToString().Should().Be("Applications/ss04fto6lzk5/ss04fto6lzk5.json");
+                patch.Position = 0;
+                new StreamReader(patch).ReadToEnd().Should().Contain(
+                    $" 1 deletion(-)\n\n--- a/Applications/ss04fto6lzk5/ss04fto6lzk5.json\n+++ b/dev/null");
+            }
         }
     }
 
@@ -212,15 +217,18 @@ public class GitConnectionTests
         var (sut, tip, commit) = await CreateCommitWithTransformation(
             c => c.AddOrUpdate("test.txt", Encoding.UTF8.GetBytes("foo")), updateBranch: false);
 
-        // Assert
-        var diff = await sut.CompareAsync("HEAD", commit.Id.ToString());
-        using (new AssertionScope())
+        using (sut)
         {
-            diff.Should().HaveCount(1);
-            diff[0].Type.Should().Be(ChangeType.Added);
-            diff[0].NewPath!.ToString().Should().Be("test.txt");
-            var newBlob = await diff[0].New!.GetEntryAsync<BlobEntry>();
-            newBlob.GetText().Should().Be("foo");
+            // Assert
+            var diff = await sut.CompareAsync("HEAD", commit.Id.ToString());
+            using (new AssertionScope())
+            {
+                diff.Should().HaveCount(1);
+                diff[0].Type.Should().Be(ChangeType.Added);
+                diff[0].NewPath!.ToString().Should().Be("test.txt");
+                var newBlob = await diff[0].New!.GetEntryAsync<BlobEntry>();
+                newBlob.GetText().Should().Be("foo");
+            }
         }
     }
 
@@ -231,7 +239,7 @@ public class GitConnectionTests
         // Arrange
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
         GitConnection.Create(folder, isBare: true);
-        var sut = CreateProvider().Invoke(folder);
+        using var sut = CreateProvider().Invoke(folder, isWrite: true);
 
         // Act
         var commit = await sut.CommitAsync("main",
@@ -265,7 +273,7 @@ public class GitConnectionTests
         {
             writer.Write("foo");
         }
-        var sut = CreateProvider().Invoke(folder);
+        using var sut = CreateProvider().Invoke(folder, isWrite: true);
 
         // Act
         sut.Index.AddEntries("*");
@@ -294,7 +302,7 @@ public class GitConnectionTests
         {
             writer.Write("foo");
         }
-        var sut = CreateProvider().Invoke(folder);
+        using var sut = CreateProvider().Invoke(folder, isWrite: true);
         sut.Index.AddEntries("*");
 
         // Act
@@ -324,8 +332,9 @@ public class GitConnectionTests
     {
         // Arrange
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        TestUtils.ForceDeleteDirectory(folder);
         ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteRepository), folder, overwriteFiles: true);
-        var sut = CreateProvider().Invoke($"{folder}/.git");
+        var sut = CreateProvider().Invoke($"{folder}/.git", isWrite: true);
 
         // Act
         var tip = await sut.Head.GetTipAsync();
@@ -346,7 +355,7 @@ public class GitConnectionTests
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
         TestUtils.ForceDeleteDirectory(folder);
         GitConnection.Create(folder, isBare: true);
-        using var sut = CreateProvider().Invoke(folder);
+        using var sut = CreateProvider().Invoke(folder, isWrite: true);
 
         // Act
         var commit = await sut.CommitAsync("main",
@@ -374,6 +383,7 @@ public class GitConnectionTests
     {
         // Arrange
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        TestUtils.ForceDeleteDirectory(folder);
         ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteRepository), folder, overwriteFiles: true);
         using var sut = CreateProvider().Invoke($"{folder}/.git");
 
@@ -398,6 +408,7 @@ public class GitConnectionTests
     {
         // Arrange
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        TestUtils.ForceDeleteDirectory(folder);
         ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteMergeRepository), folder, overwriteFiles: true);
         using var sut = CreateProvider().Invoke($"{folder}/.git");
 
@@ -423,6 +434,7 @@ public class GitConnectionTests
     {
         // Arrange
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        TestUtils.ForceDeleteDirectory(folder);
         ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteRepositoryWithRename), folder, overwriteFiles: true);
         using var sut = CreateProvider().Invoke($"{folder}/.git");
 
@@ -445,6 +457,7 @@ public class GitConnectionTests
     {
         // Arrange
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        TestUtils.ForceDeleteDirectory(folder);
         ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteRepository), folder, overwriteFiles: true);
         using var sut = CreateProvider().Invoke($"{folder}/.git");
 
@@ -467,6 +480,7 @@ public class GitConnectionTests
     {
         // Arrange
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        TestUtils.ForceDeleteDirectory(folder);
         ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteMergeRepository), folder, overwriteFiles: true);
         using var sut = CreateProvider().Invoke($"{folder}/.git");
 
@@ -485,6 +499,7 @@ public class GitConnectionTests
     {
         // Arrange
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        TestUtils.ForceDeleteDirectory(folder);
         ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteRepository), folder, overwriteFiles: true);
         using var sut = CreateProvider().Invoke($"{folder}/.git");
 
@@ -507,6 +522,7 @@ public class GitConnectionTests
     {
         // Arrange
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        TestUtils.ForceDeleteDirectory(folder);
         ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteRepository), folder, overwriteFiles: true);
         using var sut = CreateProvider().Invoke($"{folder}/.git");
 

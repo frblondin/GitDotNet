@@ -41,14 +41,14 @@ public class PackReaderTests
     public async Task GetCommits()
     {
         // Act
-        var objects = new ObjectResolver(".git", true,
-                                  Options.Create(new GitConnection.Options()),
-                                  path => CreateLooseReader(path, fileSystem),
-                                  _ => sut,
-                                  path => CreateLfsReader(path, fileSystem),
-                                  (_, _) => throw new NotImplementedException(),
-                                  A.Fake<IMemoryCache>(),
-                                  fileSystem);
+        var objects = new ObjectResolver(".git", EmptyLock, true,
+            Options.Create(new GitConnection.Options()),
+            path => CreateLooseReader(path, fileSystem),
+            _ => sut,
+            path => CreateLfsReader(path, fileSystem),
+            (_, _) => throw new NotImplementedException(),
+            A.Fake<IMemoryCache>(),
+            fileSystem);
         var entries = sut.GetEntriesAsync(_ => null!);
         var firstCommitEntry = await entries.FirstAsync(e => e.Type == EntryType.Commit);
 
@@ -79,7 +79,7 @@ public class PackReaderTests
         fileSystem.AddFile(".git/objects/packs/data.pack", new MockFileData(Resource.Pack));
         fileSystem.AddFile(".git/objects/packs/data.idx", new MockFileData(Resource.PackIndex));
         var objects = A.Fake<ObjectResolver>(o => o.WithArgumentsForConstructor(() =>
-            new(".git", true,
+            new(".git", EmptyLock, true,
                 Options.Create(new GitConnection.Options()),
                 path => CreateLooseReader(path, fileSystem),
                 A.Fake<PackReaderFactory>(),

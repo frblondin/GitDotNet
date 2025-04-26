@@ -42,19 +42,18 @@ public static class ServiceConfiguration
                 sp.GetRequiredService<CurrentOperationReaderFactory>(),
                 sp.GetRequiredService<IFileSystem>(),
                 sp.GetRequiredService<GitCliCommand>()))
-        .AddScoped<GitConnectionProvider>(sp => path =>
+        .AddScoped<GitConnectionProvider>(sp => (path, isWrite) =>
             new(path,
+                isWrite,
                 sp.GetRequiredService<RepositoryInfoFactory>(),
                 sp.GetRequiredService<ObjectResolverFactory>(),
                 sp.GetRequiredService<BranchRefReaderFactory>(),
                 sp.GetRequiredService<IndexFactory>(),
                 sp.GetRequiredService<ITreeComparer>(),
                 sp.GetRequiredService<TransformationComposerFactory>(),
-                sp.GetRequiredService<RepositoryLockerFactory>(),
+                sp.GetRequiredService<ConnectionPool>(),
                 sp.GetRequiredService<IFileSystem>()))
-        .AddScoped<RepositoryLockerFactory>(sp => path =>
-            new RepositoryLocker(path,
-                sp.GetRequiredService<IFileSystem>()))
+        .AddSingleton<ConnectionPool>()
         .AddScoped<ConfigReaderFactory>(sp => path =>
             new(path, sp.GetRequiredService<IFileSystem>()));
 
@@ -70,9 +69,10 @@ public static class ServiceConfiguration
                 sp.GetRequiredService<IFileSystem>()))
         .AddScoped<IndexFactory>(sp => (repositoryPath, entryProvider, locker) =>
             new(repositoryPath, entryProvider, locker, sp.GetRequiredService<IndexReaderFactory>(), sp.GetRequiredService<IFileSystem>()))
-        .AddScoped<ObjectResolverFactory>(sp => (path, useReadCommitGraph) =>
+        .AddScoped<ObjectResolverFactory>(sp => (path, @lock, useReadCommitGraph) =>
             new ObjectResolver(
                 path,
+                @lock,
                 useReadCommitGraph,
                 sp.GetRequiredService<IOptions<GitConnection.Options>>(),
                 sp.GetRequiredService<LooseReaderFactory>(),

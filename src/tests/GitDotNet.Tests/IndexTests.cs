@@ -6,7 +6,6 @@ using FluentAssertions.Execution;
 using GitDotNet.Readers;
 using GitDotNet.Tests.Helpers;
 using GitDotNet.Tests.Properties;
-using GitDotNet.Tools;
 using static GitDotNet.Tests.Helpers.DependencyInjectionProvider;
 using static GitDotNet.Tests.Helpers.Fakes;
 
@@ -26,7 +25,7 @@ public class IndexTests
         {
             A.CallTo(() => i.Path).Returns(".git");
         }));
-        var sut = new Index(info, resolver, RepositoryLocker.Empty, (_, _) => reader, fileSystem);
+        var sut = new Index(info, resolver, EmptyLock, (_, _) => reader, fileSystem);
 
         // Act
         var entries = await sut.GetEntriesAsync();
@@ -54,7 +53,8 @@ public class IndexTests
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
         TestUtils.ForceDeleteDirectory(folder);
         GitConnection.Create(folder);
-        var sut = CreateProvider().Invoke(folder).Index;
+        using var connection = CreateProvider().Invoke(folder, isWrite: true);
+        var sut = connection.Index;
 
         // Act
         sut.AddEntry(Encoding.UTF8.GetBytes("foo"), "test.txt", FileMode.RegularFile);

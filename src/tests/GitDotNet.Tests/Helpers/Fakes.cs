@@ -33,15 +33,12 @@ internal static class Fakes
                     entryProvider(call.GetArgument<HashId>(0)!)));
         }));
 
-    private static object CreateTaskFromResult(this IFakeObjectCall call, object value) => _taskFromResultMethod
+    private static object CreateTaskFromResult(this IFakeObjectCall call, object value) =>
+        typeof(Task).GetMethod(nameof(Task.FromResult))!
         .MakeGenericMethod(call.Method.ReturnType.GetGenericArguments()[0])
         .Invoke(null, [value])!;
 
-    private static MethodInfo _taskFromResultMethod = typeof(Task).GetMethod(nameof(Task.FromResult))!;
-
-    internal static IRepositoryLocker EmptyLocker { get; } = A.Fake<IRepositoryLocker>();
-
-    internal static RepositoryLockerFactory EmptyLockerFactory { get; } = _ => EmptyLocker;
-
     internal static TResult NotImplemented<TArg, TResult>(TArg _) => throw new NotImplementedException();
+
+    internal static ConnectionPool.Lock EmptyLock { get; } = new(null, null, true, new FileSystem());
 }
