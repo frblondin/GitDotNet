@@ -178,7 +178,6 @@ class Build : NukeBuild
                     .EnableNoBuild()
                     .EnableNoRestore()
                     .SetLoggers("trx")
-                    .AddProcessAdditionalArguments("-m:1") // Make sure only one assembly gets tested at a time for coverage collect
                     .SetResultsDirectory(TestDirectory))
                 .SetConfigFile(SourceDirectory / "CoverageConfig.xml")
                 .SetFormat("xml")
