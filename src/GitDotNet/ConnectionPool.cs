@@ -11,6 +11,7 @@ internal partial class ConnectionPool(IFileSystem fileSystem)
 
     public virtual Lock Acquire(string path, bool isWrite, CancellationToken? token = null)
     {
+        Console.WriteLine($"path: {path}");
         var normalized = fileSystem.Path.GetFullPath(path).Replace('\\', '/').Trim('/');
         var readerWriteLock = _locks.GetOrAdd(path, _ => new AsyncReaderWriterLock());
         var @lock = isWrite ?
