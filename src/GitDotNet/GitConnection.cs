@@ -9,8 +9,10 @@ namespace GitDotNet;
 
 /// <summary>Factory delegate for creating a <see cref="GitConnection"/> instance.</summary>
 /// <param name="path">The path to the Git repository.</param>
+/// <param name="isWrite">Whether the connection is likely to write, meaning that is will use an
+/// exclusive access and prevent concurrent reading or writing connection to start.</param>
 /// <returns>A new instance of <see cref="GitConnection"/>.</returns>
-public delegate GitConnection GitConnectionProvider(string path);
+public delegate GitConnection GitConnectionProvider(string path, bool isWrite = false);
 
 /// <summary>Represents a Git repository.</summary>
 [DebuggerDisplay("{Info.Path,nq}")]
@@ -19,30 +21,31 @@ public partial class GitConnection : IDisposable
     private readonly Lazy<IObjectResolver> _objects;
     private readonly BranchRefReader _branchRefReader;
     private readonly Lazy<Index> _index;
-    private readonly IRepositoryLocker _lock;
+    private readonly ConnectionPool.Lock _lock;
     private readonly ITreeComparer _comparer;
     private readonly TransformationComposerFactory _transformationComposerFactory;
     private readonly IFileSystem _fileSystem;
     private bool _disposedValue;
 
     internal GitConnection(string path,
-                           RepositoryInfoFactory infoFactory,
-                           ObjectResolverFactory objectsFactory,
-                           BranchRefReaderFactory branchRefReaderFactory,
-                           IndexFactory indexFactory,
-                           ITreeComparer comparer,
-                           TransformationComposerFactory transformationComposerFactory,
-                           RepositoryLockerFactory repositoryLockFactory,
-                           IFileSystem fileSystem)
+        bool isWrite,
+        RepositoryInfoFactory infoFactory,
+        ObjectResolverFactory objectsFactory,
+        BranchRefReaderFactory branchRefReaderFactory,
+        IndexFactory indexFactory,
+        ITreeComparer comparer,
+        TransformationComposerFactory transformationComposerFactory,
+        ConnectionPool pool,
+        IFileSystem fileSystem)
     {
         if (!fileSystem.Directory.Exists(path)) throw new DirectoryNotFoundException($"Directory not found: {path}.");
 
         Info = infoFactory(path);
         _comparer = comparer;
         _transformationComposerFactory = transformationComposerFactory;
-        _objects = new(() => objectsFactory(Info.Path, Info.Config.UseCommitGraph));
+        _lock = pool.Acquire(Info.Path, isWrite);
+        _objects = new(() => objectsFactory(Info.Path, _lock, Info.Config.UseCommitGraph));
         _branchRefReader = branchRefReaderFactory(this);
-        _lock = repositoryLockFactory(Info.Path);
         _index = new(() => indexFactory(Info, Objects, _lock));
         _fileSystem = fileSystem;
     }
@@ -226,14 +229,6 @@ public partial class GitConnection : IDisposable
 
             _disposedValue = true;
         }
-    }
-
-    /// <summary>Finalizes an instance of the <see cref="GitConnection"/> class.</summary>
-    [ExcludeFromCodeCoverage]
-    ~GitConnection()
-    {
-        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-        Dispose(disposing: false);
     }
 
     /// <inheritdoc/>

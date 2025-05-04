@@ -1,19 +1,20 @@
-using GitDotNet.Readers;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Options;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
+using GitDotNet.Readers;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 
 namespace GitDotNet;
 
-internal delegate IObjectResolver ObjectResolverFactory(string repositoryPath, bool useReadCommitGraph);
+internal delegate IObjectResolver ObjectResolverFactory(string repositoryPath, ConnectionPool.Lock @lock, bool useReadCommitGraph);
 
 /// <summary>Represents a collection of Git objects in a repository.</summary>
 internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
 {
     internal const int HashLength = 20;
     private readonly bool _useReadCommitGraph;
+    private readonly ConnectionPool.Lock _lock;
     private readonly IOptions<GitConnection.Options> _options;
     private readonly LooseReader _looseObjects;
     private readonly PackReaderFactory _packReaderFactory;
@@ -24,7 +25,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     private readonly CancellationTokenSource _disposed = new();
     private bool _disposedValue;
 
-    internal ObjectResolver(string repositoryPath, bool useReadCommitGraph,
+    internal ObjectResolver(string repositoryPath, ConnectionPool.Lock @lock, bool useReadCommitGraph,
                             IOptions<GitConnection.Options> options,
                             LooseReaderFactory looseReaderFactory,
                             PackReaderFactory packReaderFactory,
@@ -34,7 +35,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
                             IFileSystem fileSystem)
     {
         Path = fileSystem.Path.Combine(repositoryPath, "objects");
-        _fileSystem = fileSystem;
+        _lock = @lock;
         _useReadCommitGraph = useReadCommitGraph;
         _options = options;
         _looseObjects = looseReaderFactory(Path);
@@ -42,6 +43,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         _commitReader = new(() => commitReaderFactory(Path, this));
         _lfsReader = lfsReaderFactory(fileSystem.Path.Combine(repositoryPath, "lfs", "objects"));
         _memoryCache = memoryCache;
+        _fileSystem = fileSystem;
 
         PackReaders = ReinitializePacks();
     }
@@ -76,11 +78,12 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
 
     internal async Task<UnlinkedEntry> GetUnlinkedEntryAsync(HashId id, bool throwIfNotFound) =>
         (await _memoryCache.GetOrCreateAsync((id, nameof(UnlinkedEntry)),
-                                             async entry => await ReadUnlinkedEntryAsync(entry, id, throwIfNotFound)))!;
+            async entry => await ReadUnlinkedEntryAsync(entry, id, throwIfNotFound)))!;
 
     private async Task<UnlinkedEntry?> ReadUnlinkedEntryAsync(ICacheEntry entry, HashId id, bool throwIfNotFound)
     {
         ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(ObjectResolver));
+        _lock.WaitUntilCanRead();
 
         // Read loose object
         var hexString = id.ToString();
@@ -203,16 +206,24 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         {
             if (disposing)
             {
-                if (!_disposed.IsCancellationRequested)
-                    _disposed.Cancel();
-                _disposed.Dispose();
                 if (_commitReader.IsValueCreated)
                     _commitReader.Value?.Dispose();
                 DisposePacks();
             }
+            if (!(_disposed?.IsCancellationRequested ?? false))
+                _disposed!.Cancel();
+            _disposed?.Dispose();
 
             _disposedValue = true;
         }
+    }
+
+    /// <summary>Finalizes an instance of the <see cref="GitConnection"/> class.</summary>
+    [ExcludeFromCodeCoverage]
+    ~ObjectResolver()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: false);
     }
 
     /// <inheritdoc/>

@@ -27,8 +27,11 @@ public partial class GitConnection
         if (author != null) command += $" --author=\"{author.Name} <{author.Email}>\"";
 
         // Execute the CLI command and get the output
-        _lock.ExecuteWithTemporaryLockRelease(() =>
-            GitCliCommand.Execute(Info.RootFilePath, command, updateEnvironmentVariables: AddCommitter));
+        await _lock.ExecuteWithTemporaryLockReleaseAsync(() =>
+        {
+            GitCliCommand.Execute(Info.RootFilePath, command, updateEnvironmentVariables: AddCommitter);
+            return Task.CompletedTask;
+        });
 
         return await Head.GetTipAsync();
 
@@ -74,9 +77,10 @@ public partial class GitConnection
         var composer = _transformationComposerFactory(Info.Path);
         await transformations(composer);
 
-        var hash = await composer.CommitAsync(canonicalName, commit, options);
+        var result = default(HashId);
+        await _lock.ExecuteWithTemporaryLockReleaseAsync(async () => result = await composer.CommitAsync(canonicalName, commit, options));
         (Objects as IObjectResolverInternal)?.ReinitializePacks();
-        return await Objects.GetAsync<CommitEntry>(hash);
+        return await Objects.GetAsync<CommitEntry>(result!);
     }
 
     /// <summary>Creates a new in-memory commit entry before it gets committed to repository.</summary>

@@ -22,6 +22,7 @@
     <PackageVersion Include="FakeItEasy" Version="8.3.0" />
     <PackageVersion Include="FluentAssertions" Version="7.2.0" />
     <PackageVersion Include="Nerdbank.GitVersioning" Version="3.7.115" />
+    <PackageVersion Include="Nito.AsyncEx.Coordination" Version="5.1.2" />
     <PackageVersion Include="NUnit" Version="4.3.2" />
     <PackageVersion Include="NUnit.Analyzers" Version="4.6.0" />
     <PackageVersion Include="NUnit3TestAdapter" Version="5.0.0" />

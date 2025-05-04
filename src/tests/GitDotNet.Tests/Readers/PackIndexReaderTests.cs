@@ -54,7 +54,7 @@ public class PackIndexReaderTests
         fileSystem.AddFile(".git/objects/packs/data.pack", new MockFileData(Resource.Pack));
         fileSystem.AddFile(".git/objects/packs/data.idx", new MockFileData(Resource.PackIndex));
         var objects = A.Fake<ObjectResolver>(o => o.WithArgumentsForConstructor(() =>
-            new(".git", true,
+            new(".git", EmptyLock, true,
                 Options.Create(new GitConnection.Options()),
                 path => CreateLooseReader(path, fileSystem),
                 A.Fake<PackReaderFactory>(),

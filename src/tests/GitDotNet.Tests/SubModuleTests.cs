@@ -13,7 +13,7 @@ public class SubModuleTests
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
         TestUtils.ForceDeleteDirectory(folder);
         GitConnection.Create(folder, isBare: true);
-        using var sut = CreateProvider().Invoke(folder);
+        using var sut = CreateProvider().Invoke(folder, isWrite: true);
 
         // Act
         var commit = await sut.CommitAsync("main",
