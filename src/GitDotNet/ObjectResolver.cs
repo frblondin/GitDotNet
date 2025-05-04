@@ -206,16 +206,24 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         {
             if (disposing)
             {
-                if (!_disposed.IsCancellationRequested)
-                    _disposed.Cancel();
-                _disposed.Dispose();
                 if (_commitReader.IsValueCreated)
                     _commitReader.Value?.Dispose();
                 DisposePacks();
             }
+            if (!(_disposed?.IsCancellationRequested ?? false))
+                _disposed!.Cancel();
+            _disposed?.Dispose();
 
             _disposedValue = true;
         }
+    }
+
+    /// <summary>Finalizes an instance of the <see cref="GitConnection"/> class.</summary>
+    [ExcludeFromCodeCoverage]
+    ~ObjectResolver()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: false);
     }
 
     /// <inheritdoc/>

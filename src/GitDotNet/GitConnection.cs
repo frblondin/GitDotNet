@@ -231,14 +231,6 @@ public partial class GitConnection : IDisposable
         }
     }
 
-    /// <summary>Finalizes an instance of the <see cref="GitConnection"/> class.</summary>
-    [ExcludeFromCodeCoverage]
-    ~GitConnection()
-    {
-        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-        Dispose(disposing: false);
-    }
-
     /// <inheritdoc/>
     public void Dispose()
     {

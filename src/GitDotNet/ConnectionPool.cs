@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
 using Nito.AsyncEx;
 
@@ -108,12 +109,20 @@ internal partial class ConnectionPool(IFileSystem fileSystem)
             {
                 if (disposing)
                 {
-                    _lock?.Dispose();
                     if (IsWrite) DeleteLockFile();
                 }
+                _lock?.Dispose();
 
                 _disposedValue = true;
             }
+        }
+
+        /// <summary>Finalizes an instance of the <see cref="GitConnection"/> class.</summary>
+        [ExcludeFromCodeCoverage]
+        ~Lock()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: false);
         }
 
         /// <inheritdoc />
