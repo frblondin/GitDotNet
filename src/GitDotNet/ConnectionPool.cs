@@ -107,10 +107,7 @@ internal partial class ConnectionPool(IFileSystem fileSystem)
         {
             if (!_disposedValue)
             {
-                if (disposing)
-                {
-                    if (IsWrite) DeleteLockFile();
-                }
+                if (IsWrite) DeleteLockFile();
                 _lock?.Dispose();
 
                 _disposedValue = true;

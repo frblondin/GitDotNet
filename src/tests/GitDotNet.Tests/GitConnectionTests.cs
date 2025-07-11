@@ -558,4 +558,35 @@ public class GitConnectionTests
         // Assert
         commit.Id.ToString().Should().Be("a28d9681fdf40631632a42b303be274e3869d5d5");
     }
+
+    [Test]
+    public void Finalizer_DisposesLock_WhenNotExplicitlyDisposed()
+    {
+        // Arrange
+        WeakReference? weakRef = null;
+        void CreateAndRelease()
+        {
+            var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+            TestUtils.ForceDeleteDirectory(folder);
+            GitConnection.Create(folder, isBare: true);
+            var connection = CreateProvider().Invoke(folder, isWrite: true);
+            weakRef = new WeakReference(connection);
+        }
+
+        // Act
+        CreateAndRelease();
+        File.Exists(Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name, "index.lock"))
+            .Should().BeTrue();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        // Assert
+        using (new AssertionScope())
+        {
+            weakRef!.IsAlive.Should().BeFalse();
+            File.Exists(Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name, "index.lock"))
+                .Should().BeFalse();
+        }
+    }
 }

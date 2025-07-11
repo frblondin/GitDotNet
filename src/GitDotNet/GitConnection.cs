@@ -221,10 +221,7 @@ public partial class GitConnection : IDisposable
     {
         if (!_disposedValue)
         {
-            if (disposing)
-            {
-                if (_objects.IsValueCreated) _objects.Value.Dispose();
-            }
+            if (_objects.IsValueCreated) _objects.Value.Dispose();
             _lock.Dispose();
 
             _disposedValue = true;
@@ -236,6 +233,12 @@ public partial class GitConnection : IDisposable
     {
         Dispose(disposing: true);
         GC.SuppressFinalize(this);
+    }
+
+    /// <summary>Finalizes the <see cref="GitConnection"/> instance.</summary>
+    ~GitConnection()
+    {
+        Dispose(disposing: false);
     }
 
     [GeneratedRegex(@"^ref:\s*(.+)$")]
