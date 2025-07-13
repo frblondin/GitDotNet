@@ -214,6 +214,23 @@ public class ConnectionPoolTests
         action.Should().Throw<TaskCanceledException>();
     }
 
+    [Test]
+    public void AcquireWriteLock_ShouldTimeout_WhenSecondWriteLockRequestedWithShortToken()
+    {
+        // Arrange
+        var path = "/test/repo";
+        _fileSystem.AddDirectory(path);
+        using var writeLock = _connectionPool.Acquire(path, isWrite: true);
+        using var cts = new CancellationTokenSource(100); // 100ms timeout
+
+        // Act
+        var action = () => _connectionPool.Acquire(path, isWrite: true, cts.Token);
+
+        // Assert
+        action.Should().Throw<TimeoutException>()
+            .WithMessage($"Unable to acquire a write access to {path}.");
+    }
+
     private MockFileSystem _fileSystem;
     private ConnectionPool _connectionPool;
 

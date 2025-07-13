@@ -43,7 +43,8 @@ public partial class GitConnection : IDisposable
         Info = infoFactory(path);
         _comparer = comparer;
         _transformationComposerFactory = transformationComposerFactory;
-        _lock = pool.Acquire(Info.Path, isWrite);
+        using var tokenSource = new CancellationTokenSource(ConnectionPool.TimeOut);
+        _lock = pool.Acquire(Info.Path, isWrite, tokenSource.Token);
         _objects = new(() => objectsFactory(Info.Path, _lock, Info.Config.UseCommitGraph));
         _branchRefReader = branchRefReaderFactory(this);
         _index = new(() => indexFactory(Info, Objects, _lock));

@@ -9,14 +9,23 @@ internal partial class ConnectionPool(IFileSystem fileSystem)
     private static readonly ConcurrentDictionary<string, AsyncReaderWriterLock> _locks =
         new(StringComparer.OrdinalIgnoreCase);
 
+    public static TimeSpan TimeOut { get; } = TimeSpan.FromMinutes(1);
+
     public virtual Lock Acquire(string path, bool isWrite, CancellationToken? token = null)
     {
         var normalized = fileSystem.Path.GetFullPath(path).Replace('\\', '/').TrimEnd('/');
         var readerWriteLock = _locks.GetOrAdd(path, _ => new AsyncReaderWriterLock());
-        var @lock = isWrite ?
-            readerWriteLock.WriterLock(token ?? CancellationToken.None) :
-            readerWriteLock.ReaderLock(token ?? CancellationToken.None);
-        return new Lock(normalized, @lock, isWrite, fileSystem);
+        try
+        {
+            var @lock = isWrite ?
+                readerWriteLock.WriterLock(token ?? CancellationToken.None) :
+                readerWriteLock.ReaderLock(token ?? CancellationToken.None);
+            return new Lock(normalized, @lock, isWrite, fileSystem);
+        }
+        catch (OperationCanceledException)
+        {
+            throw new TimeoutException($"Unable to acquire a {(isWrite ? "write" : "read")} access to {path}.");
+        }
     }
 
     internal sealed class Lock : IDisposable
@@ -68,7 +77,7 @@ internal partial class ConnectionPool(IFileSystem fileSystem)
         {
             ObjectDisposedException.ThrowIf(_disposedValue, nameof(Lock));
             if (_lockFilePath == null) return;
-            if (!SpinWait.SpinUntil(() => !LockFileExists, TimeSpan.FromMinutes(1)))
+            if (!SpinWait.SpinUntil(() => !LockFileExists, TimeOut))
             {
                 throw new TimeoutException("Unable to acquire index.lock file.");
             }
