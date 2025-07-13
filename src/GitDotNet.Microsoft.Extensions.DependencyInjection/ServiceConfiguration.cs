@@ -43,17 +43,14 @@ public static class ServiceConfiguration
                 sp.GetRequiredService<IFileSystem>(),
                 sp.GetRequiredService<GitCliCommand>()))
         .AddScoped<GitConnectionProvider>(sp => (path, isWrite) =>
-            new(path,
-                isWrite,
+            new(path, isWrite,
                 sp.GetRequiredService<RepositoryInfoFactory>(),
                 sp.GetRequiredService<ObjectResolverFactory>(),
                 sp.GetRequiredService<BranchRefReaderFactory>(),
                 sp.GetRequiredService<IndexFactory>(),
                 sp.GetRequiredService<ITreeComparer>(),
                 sp.GetRequiredService<TransformationComposerFactory>(),
-                sp.GetRequiredService<ConnectionPool>(),
                 sp.GetRequiredService<IFileSystem>()))
-        .AddSingleton<ConnectionPool>()
         .AddScoped<ConfigReaderFactory>(sp => path =>
             new(path, sp.GetRequiredService<IFileSystem>()));
 
@@ -67,14 +64,13 @@ public static class ServiceConfiguration
             new(path,
                 entryProvider,
                 sp.GetRequiredService<IFileSystem>()))
-        .AddScoped<IndexFactory>(sp => (repositoryPath, entryProvider, locker) =>
-            new(repositoryPath, entryProvider, locker, sp.GetRequiredService<IndexReaderFactory>(), sp.GetRequiredService<IFileSystem>()))
-        .AddScoped<ObjectResolverFactory>(sp => (path, @lock, useReadCommitGraph) =>
+        .AddScoped<IndexFactory>(sp => (repositoryPath, entryProvider) =>
+            new(repositoryPath, entryProvider, sp.GetRequiredService<IndexReaderFactory>(), sp.GetRequiredService<IFileSystem>()))
+        .AddScoped<ObjectResolverFactory>(sp => (path, useReadCommitGraph) =>
             new ObjectResolver(
-                path,
-                @lock,
-                useReadCommitGraph,
+                path, useReadCommitGraph,
                 sp.GetRequiredService<IOptions<GitConnection.Options>>(),
+                sp.GetRequiredService<IPackManager>(),
                 sp.GetRequiredService<LooseReaderFactory>(),
                 sp.GetRequiredService<PackReaderFactory>(),
                 sp.GetRequiredService<LfsReaderFactory>(),
@@ -101,7 +97,8 @@ public static class ServiceConfiguration
                 sp.GetRequiredService<PackIndexFactory>(),
                 sp.GetRequiredService<IMemoryCache>()))
         .AddScoped<PackIndexFactory>(sp => async path =>
-            await PackIndexReader.LoadAsync(path, sp.GetRequiredService<IFileSystem>()));
+            await PackIndexReader.LoadAsync(path, sp.GetRequiredService<IFileSystem>()))
+        .AddScoped<IPackManager, PackManager>();
 
     private static IServiceCollection AddWriters(this IServiceCollection services) => services
         .AddScoped<FastInsertWriterFactory>(sp => stream =>

@@ -6,7 +6,7 @@ using GitDotNet.Tools;
 
 namespace GitDotNet;
 
-internal delegate Index IndexFactory(RepositoryInfo info, IObjectResolver objectResolver, ConnectionPool.Lock repositoryLocker);
+internal delegate Index IndexFactory(RepositoryInfo info, IObjectResolver objectResolver);
 
 /// <summary>Represents a Git index file.</summary>
 [ExcludeFromCodeCoverage]
@@ -14,15 +14,13 @@ public class Index
 {
     private readonly IRepositoryInfo _info;
     private readonly IndexReader _indexReader;
-    private readonly ConnectionPool.Lock _repositoryLocker;
     private readonly IFileSystem _fileSystem;
 
-    internal Index(IRepositoryInfo info, IObjectResolver objectResolver, ConnectionPool.Lock repositoryLocker, IndexReaderFactory indexReaderFactory, IFileSystem fileSystem)
+    internal Index(IRepositoryInfo info, IObjectResolver objectResolver, IndexReaderFactory indexReaderFactory, IFileSystem fileSystem)
     {
         var indexPath = fileSystem.Path.Combine(info.Path, "index");
         _info = info;
         _indexReader = indexReaderFactory(indexPath, objectResolver);
-        _repositoryLocker = repositoryLocker;
         _fileSystem = fileSystem;
     }
 
@@ -35,7 +33,7 @@ public class Index
     /// <param name="path">Specifies the path in the repository where the new entry will be added.</param>
     /// <param name="mode">Indicates the file mode for the new entry in the Git index.</param>
     /// <exception cref="InvalidOperationException">Thrown when the creation of a blob using the git hash-object command fails.</exception>
-    public void AddEntry(byte[] data, GitPath path, FileMode mode) => _repositoryLocker.ExecuteWithTemporaryLockReleaseAsync(() =>
+    public void AddEntry(byte[] data, GitPath path, FileMode mode)
     {
         var tempFilePath = _fileSystem.Path.Combine(_fileSystem.Path.GetTempPath(), _fileSystem.Path.GetRandomFileName());
         try
@@ -57,15 +55,11 @@ public class Index
         {
             File.Delete(tempFilePath);
         }
-        return Task.CompletedTask;
-    }).ConfigureAwait(false).GetAwaiter().GetResult();
+    }
 
     /// <summary>Add file contents to the index.</summary>
     /// <param name="pattern">Files to add content from.</param>
     /// <param name="overrideExecutable">Overrides the executable bit of the added files. The executable bit is only changed in the index, the files on disk are left unchanged.</param>
-    public void AddEntries(string pattern, bool overrideExecutable = false) => _repositoryLocker.ExecuteWithTemporaryLockReleaseAsync(() =>
-    {
+    public void AddEntries(string pattern, bool overrideExecutable = false) =>
         GitCliCommand.Execute(_info.RootFilePath, $"add {pattern} {(overrideExecutable ? " --chmod=+x" : "")}");
-        return Task.CompletedTask;
-    }).ConfigureAwait(false).GetAwaiter().GetResult();
 }

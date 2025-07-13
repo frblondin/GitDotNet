@@ -25,7 +25,7 @@ public class IndexTests
         {
             A.CallTo(() => i.Path).Returns(".git");
         }));
-        var sut = new Index(info, resolver, EmptyLock, (_, _) => reader, fileSystem);
+        var sut = new Index(info, resolver, (_, _) => reader, fileSystem);
 
         // Act
         var entries = await sut.GetEntriesAsync();
