@@ -53,7 +53,7 @@ public class IndexTests
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
         TestUtils.ForceDeleteDirectory(folder);
         GitConnection.Create(folder);
-        using var connection = CreateProvider().Invoke(folder, isWrite: true);
+        using var connection = CreateProvider().Invoke(folder);
         var sut = connection.Index;
 
         // Act
