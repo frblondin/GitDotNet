@@ -9,10 +9,9 @@ namespace GitDotNet;
 
 /// <summary>Factory delegate for creating a <see cref="GitConnection"/> instance.</summary>
 /// <param name="path">The path to the Git repository.</param>
-/// <param name="isWrite">Whether the connection is likely to write, meaning that is will use an
-/// exclusive access and prevent concurrent reading or writing connection to start.</param>
+/// 
 /// <returns>A new instance of <see cref="GitConnection"/>.</returns>
-public delegate GitConnection GitConnectionProvider(string path, bool isWrite = false);
+public delegate GitConnection GitConnectionProvider(string path);
 
 /// <summary>Represents a Git repository.</summary>
 [DebuggerDisplay("{Info.Path,nq}")]
@@ -27,7 +26,6 @@ public partial class GitConnection : IDisposable
     private bool _disposedValue;
 
     internal GitConnection(string path,
-        bool isWrite,
         RepositoryInfoFactory infoFactory,
         ObjectResolverFactory objectsFactory,
         BranchRefReaderFactory branchRefReaderFactory,

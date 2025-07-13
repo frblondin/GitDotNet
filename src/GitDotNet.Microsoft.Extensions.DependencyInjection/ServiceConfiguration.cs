@@ -42,8 +42,8 @@ public static class ServiceConfiguration
                 sp.GetRequiredService<CurrentOperationReaderFactory>(),
                 sp.GetRequiredService<IFileSystem>(),
                 sp.GetRequiredService<GitCliCommand>()))
-        .AddScoped<GitConnectionProvider>(sp => (path, isWrite) =>
-            new(path, isWrite,
+        .AddScoped<GitConnectionProvider>(sp => path =>
+            new(path,
                 sp.GetRequiredService<RepositoryInfoFactory>(),
                 sp.GetRequiredService<ObjectResolverFactory>(),
                 sp.GetRequiredService<BranchRefReaderFactory>(),

@@ -129,7 +129,7 @@ public class GitConnectionTests
     {
         // Arrange & Act
         var fileSystem = default(MockFileSystem);
-        using (CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git", isWrite: true))
+        using (CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git"))
         {
         }
 
@@ -227,7 +227,7 @@ public class GitConnectionTests
         // Arrange
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
         GitConnection.Create(folder, isBare: true);
-        using var sut = CreateProvider().Invoke(folder, isWrite: true);
+        using var sut = CreateProvider().Invoke(folder);
 
         // Act
         var commit = await sut.CommitAsync("main",
@@ -261,7 +261,7 @@ public class GitConnectionTests
         {
             writer.Write("foo");
         }
-        using var sut = CreateProvider().Invoke(folder, isWrite: true);
+        using var sut = CreateProvider().Invoke(folder);
 
         // Act
         sut.Index.AddEntries("*");
@@ -290,7 +290,7 @@ public class GitConnectionTests
         {
             writer.Write("foo");
         }
-        using var sut = CreateProvider().Invoke(folder, isWrite: true);
+        using var sut = CreateProvider().Invoke(folder);
         sut.Index.AddEntries("*");
 
         // Act
@@ -322,7 +322,7 @@ public class GitConnectionTests
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
         TestUtils.ForceDeleteDirectory(folder);
         ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteRepository), folder, overwriteFiles: true);
-        var sut = CreateProvider().Invoke($"{folder}/.git", isWrite: true);
+        var sut = CreateProvider().Invoke($"{folder}/.git");
 
         // Act
         var tip = await sut.Head.GetTipAsync();
@@ -343,7 +343,7 @@ public class GitConnectionTests
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
         TestUtils.ForceDeleteDirectory(folder);
         GitConnection.Create(folder, isBare: true);
-        using var sut = CreateProvider().Invoke(folder, isWrite: true);
+        using var sut = CreateProvider().Invoke(folder);
 
         // Act
         var commit = await sut.CommitAsync("main",
