@@ -21,7 +21,6 @@ public partial class GitConnection : IDisposable
     private readonly Lazy<IObjectResolver> _objects;
     private readonly BranchRefReader _branchRefReader;
     private readonly Lazy<Index> _index;
-    private readonly ConnectionPool.Lock _lock;
     private readonly ITreeComparer _comparer;
     private readonly TransformationComposerFactory _transformationComposerFactory;
     private readonly IFileSystem _fileSystem;
@@ -35,7 +34,6 @@ public partial class GitConnection : IDisposable
         IndexFactory indexFactory,
         ITreeComparer comparer,
         TransformationComposerFactory transformationComposerFactory,
-        ConnectionPool pool,
         IFileSystem fileSystem)
     {
         if (!fileSystem.Directory.Exists(path)) throw new DirectoryNotFoundException($"Directory not found: {path}.");
@@ -43,10 +41,9 @@ public partial class GitConnection : IDisposable
         Info = infoFactory(path);
         _comparer = comparer;
         _transformationComposerFactory = transformationComposerFactory;
-        _lock = pool.Acquire(Info.Path, isWrite);
-        _objects = new(() => objectsFactory(Info.Path, _lock, Info.Config.UseCommitGraph));
+        _objects = new(() => objectsFactory(Info.Path, Info.Config.UseCommitGraph));
         _branchRefReader = branchRefReaderFactory(this);
-        _index = new(() => indexFactory(Info, Objects, _lock));
+        _index = new(() => indexFactory(Info, Objects));
         _fileSystem = fileSystem;
     }
 
@@ -222,7 +219,6 @@ public partial class GitConnection : IDisposable
         if (!_disposedValue)
         {
             if (_objects.IsValueCreated) _objects.Value.Dispose();
-            _lock.Dispose();
 
             _disposedValue = true;
         }

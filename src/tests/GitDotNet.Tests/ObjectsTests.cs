@@ -27,14 +27,15 @@ public class ObjectsTests
                 A.CallTo(() => fake.TryLoad("0123456789abcdef0123456789abcdef01234567"))
                  .Returns((EntryType.Blob, () => new MemoryStream([42]), 1)));
         });
-        var sut = new ObjectResolver(".git", EmptyLock, useReadCommitGraph: true,
-            Options.Create(new GitConnection.Options()),
-            _ => looseReader,
-            _ => throw new NotImplementedException(),
-            path => CreateLfsReader(path, fileSystem),
-            (_, _) => throw new NotImplementedException(),
-            A.Fake<IMemoryCache>(),
-            fileSystem);
+        var sut = new ObjectResolver(".git", useReadCommitGraph: true,
+            options: Options.Create(new GitConnection.Options()),
+            packManager: null!,
+            looseReaderFactory: _ => looseReader,
+            packReaderFactory: _ => throw new NotImplementedException(),
+            lfsReaderFactory: path => CreateLfsReader(path, fileSystem),
+            commitReaderFactory: (_, _) => throw new NotImplementedException(),
+            memoryCache: A.Fake<IMemoryCache>(),
+            fileSystem: fileSystem);
 
         // Act
         var entry = await sut.GetAsync<BlobEntry>("0123456789abcdef0123456789abcdef01234567");
@@ -49,7 +50,7 @@ public class ObjectsTests
         // Arrange
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
         ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteRepository), folder, overwriteFiles: true);
-        using var sut = CreateServiceProvider().GetRequiredService<ObjectResolverFactory>().Invoke(folder, EmptyLock, true);
+        using var sut = CreateServiceProvider().GetRequiredService<ObjectResolverFactory>().Invoke(folder, true);
 
         // Act
         var commit = await sut.TryGetAsync<CommitEntry>(HashId.Empty);

@@ -7,26 +7,28 @@ using Microsoft.Extensions.Options;
 
 namespace GitDotNet;
 
-internal delegate IObjectResolver ObjectResolverFactory(string repositoryPath, ConnectionPool.Lock @lock, bool useReadCommitGraph);
+internal delegate IObjectResolver ObjectResolverFactory(string repositoryPath, bool useReadCommitGraph);
 
 /// <summary>Represents a collection of Git objects in a repository.</summary>
 internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
 {
     internal const int HashLength = 20;
     private readonly bool _useReadCommitGraph;
-    private readonly ConnectionPool.Lock _lock;
     private readonly IOptions<GitConnection.Options> _options;
     private readonly LooseReader _looseObjects;
     private readonly PackReaderFactory _packReaderFactory;
     private readonly Lazy<CommitGraphReader?> _commitReader;
     private readonly LfsReader _lfsReader;
     private readonly IMemoryCache _memoryCache;
-    private readonly IFileSystem _fileSystem;
+    private readonly IPackManager _packManager;
     private readonly CancellationTokenSource _disposed = new();
     private bool _disposedValue;
+    private ImmutableDictionary<string, Lazy<PackReader>> _packReaders = ImmutableDictionary<string, Lazy<PackReader>>.Empty;
+    private DateTime? _lastInfoPacksTimestamp;
 
-    internal ObjectResolver(string repositoryPath, ConnectionPool.Lock @lock, bool useReadCommitGraph,
+    internal ObjectResolver(string repositoryPath, bool useReadCommitGraph,
                             IOptions<GitConnection.Options> options,
+                            IPackManager packManager,
                             LooseReaderFactory looseReaderFactory,
                             PackReaderFactory packReaderFactory,
                             LfsReaderFactory lfsReaderFactory,
@@ -35,7 +37,6 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
                             IFileSystem fileSystem)
     {
         Path = fileSystem.Path.Combine(repositoryPath, "objects");
-        _lock = @lock;
         _useReadCommitGraph = useReadCommitGraph;
         _options = options;
         _looseObjects = looseReaderFactory(Path);
@@ -43,31 +44,27 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         _commitReader = new(() => commitReaderFactory(Path, this));
         _lfsReader = lfsReaderFactory(fileSystem.Path.Combine(repositoryPath, "lfs", "objects"));
         _memoryCache = memoryCache;
-        _fileSystem = fileSystem;
-
-        PackReaders = ReinitializePacks();
+        _packManager = packManager;
     }
-
-    public ImmutableDictionary<string, Lazy<PackReader>> PackReaders { get; private set; }
 
     /// <summary>Gets the path to the Git objects directory.</summary>
     public string Path { get; init; }
 
-    public ImmutableDictionary<string, Lazy<PackReader>> ReinitializePacks()
+    public ImmutableDictionary<string, Lazy<PackReader>> PackReaders
     {
-        DisposePacks();
-
-        var packDir = _fileSystem.Path.Combine(Path, "pack");
-        var result = ImmutableDictionary.CreateBuilder<string, Lazy<PackReader>>();
-        if (_fileSystem.Directory.Exists(packDir))
+        get
         {
-            foreach (var packFile in _fileSystem.Directory.GetFiles(packDir, "*.pack"))
-            {
-                result[_fileSystem.Path.GetFileNameWithoutExtension(packFile)] =
-                    new(() => _packReaderFactory(packFile));
-            }
+            var (packReaders, timestamp) = _packManager.UpdatePacksIfNeeded(
+                Path, 
+                _packReaders, 
+                _lastInfoPacksTimestamp, 
+                _packReaderFactory);
+            
+            _packReaders = packReaders;
+            _lastInfoPacksTimestamp = timestamp;
+            return _packReaders;
         }
-        return PackReaders = result.ToImmutable();
+        private set => _packReaders = value;
     }
 
     [ExcludeFromCodeCoverage]
@@ -83,7 +80,6 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     private async Task<UnlinkedEntry?> ReadUnlinkedEntryAsync(ICacheEntry entry, HashId id, bool throwIfNotFound)
     {
         ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(ObjectResolver));
-        _lock.WaitUntilCanRead();
 
         // Read loose object
         var hexString = id.ToString();
@@ -208,7 +204,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
             {
                 if (_commitReader.IsValueCreated)
                     _commitReader.Value?.Dispose();
-                DisposePacks();
+                _packManager.DisposePacks(_packReaders);
             }
             if (!(_disposed?.IsCancellationRequested ?? false))
                 _disposed!.Cancel();
@@ -233,14 +229,6 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         Dispose(disposing: true);
         GC.SuppressFinalize(this);
     }
-
-    private void DisposePacks()
-    {
-        foreach (var pack in PackReaders?.Values ?? [])
-        {
-            if (pack.IsValueCreated) pack.Value.Dispose();
-        }
-    }
 }
 
 /// <summary>Represents a collection of Git objects in a repository.</summary>
@@ -262,8 +250,6 @@ internal interface IObjectResolverInternal
     Task<byte[]> GetDataAsync(HashId id);
 
     Task<TEntry> GetAsync<TEntry>(HashId id) where TEntry : Entry;
-
-    ImmutableDictionary<string, Lazy<PackReader>> ReinitializePacks();
 
     ImmutableDictionary<string, Lazy<PackReader>> PackReaders { get; }
 }

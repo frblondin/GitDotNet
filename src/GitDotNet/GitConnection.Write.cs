@@ -27,11 +27,7 @@ public partial class GitConnection
         if (author != null) command += $" --author=\"{author.Name} <{author.Email}>\"";
 
         // Execute the CLI command and get the output
-        await _lock.ExecuteWithTemporaryLockReleaseAsync(() =>
-        {
-            GitCliCommand.Execute(Info.RootFilePath, command, updateEnvironmentVariables: AddCommitter);
-            return Task.CompletedTask;
-        });
+        GitCliCommand.Execute(Info.RootFilePath, command, updateEnvironmentVariables: AddCommitter);
 
         return await Head.GetTipAsync();
 
@@ -77,9 +73,7 @@ public partial class GitConnection
         var composer = _transformationComposerFactory(Info.Path);
         await transformations(composer);
 
-        var result = default(HashId);
-        await _lock.ExecuteWithTemporaryLockReleaseAsync(async () => result = await composer.CommitAsync(canonicalName, commit, options));
-        (Objects as IObjectResolverInternal)?.ReinitializePacks();
+        var result = await composer.CommitAsync(canonicalName, commit, options);
         return await Objects.GetAsync<CommitEntry>(result!);
     }
 

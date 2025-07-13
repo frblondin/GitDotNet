@@ -39,6 +39,4 @@ internal static class Fakes
         .Invoke(null, [value])!;
 
     internal static TResult NotImplemented<TArg, TResult>(TArg _) => throw new NotImplementedException();
-
-    internal static ConnectionPool.Lock EmptyLock { get; } = new(null, null, true, new FileSystem());
 }
