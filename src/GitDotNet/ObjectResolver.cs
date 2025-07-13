@@ -24,6 +24,8 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     private readonly IFileSystem _fileSystem;
     private readonly CancellationTokenSource _disposed = new();
     private bool _disposedValue;
+    private ImmutableDictionary<string, Lazy<PackReader>> _packReaders = ImmutableDictionary<string, Lazy<PackReader>>.Empty;
+    private DateTime? _lastInfoPacksTimestamp;
 
     internal ObjectResolver(string repositoryPath, ConnectionPool.Lock @lock, bool useReadCommitGraph,
                             IOptions<GitConnection.Options> options,
@@ -44,30 +46,39 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         _lfsReader = lfsReaderFactory(fileSystem.Path.Combine(repositoryPath, "lfs", "objects"));
         _memoryCache = memoryCache;
         _fileSystem = fileSystem;
-
-        PackReaders = ReinitializePacks();
     }
 
-    public ImmutableDictionary<string, Lazy<PackReader>> PackReaders { get; private set; }
+    public ImmutableDictionary<string, Lazy<PackReader>> PackReaders
+    {
+        get
+        {
+            UpdatePacksIfNeeded();
+            return _packReaders;
+        }
+        private set => _packReaders = value;
+    }
 
     /// <summary>Gets the path to the Git objects directory.</summary>
     public string Path { get; init; }
 
-    public ImmutableDictionary<string, Lazy<PackReader>> ReinitializePacks()
+    private void UpdatePacksIfNeeded()
     {
-        DisposePacks();
-
         var packDir = _fileSystem.Path.Combine(Path, "pack");
-        var result = ImmutableDictionary.CreateBuilder<string, Lazy<PackReader>>();
-        if (_fileSystem.Directory.Exists(packDir))
-        {
-            foreach (var packFile in _fileSystem.Directory.GetFiles(packDir, "*.pack"))
-            {
-                result[_fileSystem.Path.GetFileNameWithoutExtension(packFile)] =
-                    new(() => _packReaderFactory(packFile));
-            }
-        }
-        return PackReaders = result.ToImmutable();
+        var infoPacksPath = _fileSystem.Path.Combine(Path, "info", "packs");
+        DateTime? currentTimestamp = null;
+        if (_fileSystem.File.Exists(infoPacksPath))
+            currentTimestamp = _fileSystem.File.GetLastWriteTimeUtc(infoPacksPath);
+        if (_lastInfoPacksTimestamp == currentTimestamp) return;
+        _lastInfoPacksTimestamp = currentTimestamp;
+        DisposePacks();
+        _packReaders = !_fileSystem.File.Exists(infoPacksPath) ?
+            ImmutableDictionary<string, Lazy<PackReader>>.Empty :
+            _fileSystem.File.ReadAllLinesShared(infoPacksPath)
+                .Select(line => line.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                .Where(parts => parts.Length == 2 && parts[0] == "P" && parts[1].EndsWith(".pack", StringComparison.OrdinalIgnoreCase))
+                .ToImmutableDictionary(
+                    parts => _fileSystem.Path.GetFileNameWithoutExtension(_fileSystem.Path.Combine(packDir, parts[1])),
+                    parts => new Lazy<PackReader>(() => _packReaderFactory(_fileSystem.Path.Combine(packDir, parts[1]))));
     }
 
     [ExcludeFromCodeCoverage]
@@ -262,8 +273,6 @@ internal interface IObjectResolverInternal
     Task<byte[]> GetDataAsync(HashId id);
 
     Task<TEntry> GetAsync<TEntry>(HashId id) where TEntry : Entry;
-
-    ImmutableDictionary<string, Lazy<PackReader>> ReinitializePacks();
 
     ImmutableDictionary<string, Lazy<PackReader>> PackReaders { get; }
 }

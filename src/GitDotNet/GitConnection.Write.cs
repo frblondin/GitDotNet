@@ -79,7 +79,6 @@ public partial class GitConnection
 
         var result = default(HashId);
         await _lock.ExecuteWithTemporaryLockReleaseAsync(async () => result = await composer.CommitAsync(canonicalName, commit, options));
-        (Objects as IObjectResolverInternal)?.ReinitializePacks();
         return await Objects.GetAsync<CommitEntry>(result!);
     }
 
