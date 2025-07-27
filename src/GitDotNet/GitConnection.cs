@@ -64,7 +64,7 @@ public partial class GitConnection : IDisposable
             var match = HeadRefRegex().Match(headContent);
             if (!match.Success)
             {
-                throw new InvalidOperationException("Invalid HEAD reference format.");
+                throw new InvalidOperationException($"Invalid HEAD reference format:\n\n{headContent}");
             }
             return Branches[match.Groups[1].Value];
         }
