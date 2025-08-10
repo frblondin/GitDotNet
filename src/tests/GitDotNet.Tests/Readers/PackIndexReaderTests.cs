@@ -56,17 +56,14 @@ public class PackIndexReaderTests
         var objects = A.Fake<ObjectResolver>(o => o.WithArgumentsForConstructor(() =>
             new(".git", true,
                 Options.Create(new GitConnection.Options()),
-                new PackManager(fileSystem),
+                path => new PackManager(path, fileSystem, A.Fake<PackReaderFactory>()),
                 path => CreateLooseReader(path, fileSystem),
-                A.Fake<PackReaderFactory>(),
                 path => CreateLfsReader(path, fileSystem),
                 (_, _) => A.Fake<CommitGraphReader>(),
                 A.Fake<IMemoryCache>(),
                 fileSystem)));
         sut = new PackReader(fileSystem.CreateOffsetReader(".git/objects/packs/data.pack"),
-                             Options.Create(new GitConnection.Options()),
-                             async path => await PackIndexReader.LoadAsync(path, fileSystem),
-                             A.Fake<IMemoryCache>());
+            async path => await PackIndexReader.LoadAsync(path, fileSystem));
     }
 
     [TearDown]
