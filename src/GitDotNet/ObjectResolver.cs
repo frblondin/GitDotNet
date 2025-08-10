@@ -54,14 +54,11 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     {
         get
         {
-            var (packReaders, timestamp) = _packManager.UpdatePacksIfNeeded(
-                Path, 
-                _packReaders, 
-                _lastInfoPacksTimestamp, 
+            (_packReaders, _lastInfoPacksTimestamp) = _packManager.UpdatePacksIfNeeded(
+                Path,
+                _packReaders,
+                _lastInfoPacksTimestamp,
                 _packReaderFactory);
-            
-            _packReaders = packReaders;
-            _lastInfoPacksTimestamp = timestamp;
             return _packReaders;
         }
         private set => _packReaders = value;
