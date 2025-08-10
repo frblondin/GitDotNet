@@ -10,8 +10,8 @@ public class TreeEntryItemTests
     {
         // Arrange
         var id = new HashId("fee84b5575de791d1ac1edb089a63ab85d504f3c");
-        var item1 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id, () => Task.FromResult<Entry>(new MockBlobEntry(id)));
-        var item2 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id, () => Task.FromResult<Entry>(new MockBlobEntry(id)));
+        var item1 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id, (id) => Task.FromResult<Entry>(new MockBlobEntry(id)));
+        var item2 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id, (id) => Task.FromResult<Entry>(new MockBlobEntry(id)));
 
         // Act
         var result = item1.Equals(item2);
@@ -26,8 +26,8 @@ public class TreeEntryItemTests
         // Arrange
         var id1 = new HashId("fee84b5575de791d1ac1edb089a63ab85d504f3c");
         var id2 = new HashId("efe84b5575de791d1ac1edb089a63ab85d504f3c");
-        var item1 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id1, () => Task.FromResult<Entry>(new MockBlobEntry(id1)));
-        var item2 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id2, () => Task.FromResult<Entry>(new MockBlobEntry(id2)));
+        var item1 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id1, (id) => Task.FromResult<Entry>(new MockBlobEntry(id)));
+        var item2 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id2, (id) => Task.FromResult<Entry>(new MockBlobEntry(id)));
 
         // Act
         var result = item1.Equals(item2);
@@ -41,8 +41,8 @@ public class TreeEntryItemTests
     {
         // Arrange
         var id = new HashId("fee84b5575de791d1ac1edb089a63ab85d504f3c");
-        var item1 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id, () => Task.FromResult<Entry>(new MockBlobEntry(id)));
-        var item2 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id, () => Task.FromResult<Entry>(new MockBlobEntry(id)));
+        var item1 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id, (id) => Task.FromResult<Entry>(new MockBlobEntry(id)));
+        var item2 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id, (id) => Task.FromResult<Entry>(new MockBlobEntry(id)));
 
         // Act
         var hashCode1 = item1.GetHashCode();
@@ -58,8 +58,8 @@ public class TreeEntryItemTests
         // Arrange
         var id1 = new HashId("fee84b5575de791d1ac1edb089a63ab85d504f3c");
         var id2 = new HashId("efe84b5575de791d1ac1edb089a63ab85d504f3c");
-        var item1 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id1, () => Task.FromResult<Entry>(new MockBlobEntry(id1)));
-        var item2 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id2, () => Task.FromResult<Entry>(new MockBlobEntry(id2)));
+        var item1 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id1, (id) => Task.FromResult<Entry>(new MockBlobEntry(id)));
+        var item2 = new TreeEntryItem(FileMode.RegularFile, "file.txt", id2, (id) => Task.FromResult<Entry>(new MockBlobEntry(id)));
 
         // Act
         var hashCode1 = item1.GetHashCode();

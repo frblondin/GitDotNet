@@ -9,10 +9,10 @@ namespace GitDotNet;
 [DebuggerDisplay("{Name,nq}")]
 public sealed class TreeEntryItem : IEquatable<TreeEntryItem>
 {
-    private readonly Func<Task<Entry>> _entryProvider;
+    private readonly Func<HashId, Task<Entry>> _entryProvider;
     private Entry? _entry;
 
-    internal TreeEntryItem(FileMode mode, string name, HashId id, Func<Task<Entry>> entryProvider)
+    internal TreeEntryItem(FileMode mode, string name, HashId id, Func<HashId, Task<Entry>> entryProvider)
     {
         Mode = mode;
         Name = name;
@@ -32,7 +32,7 @@ public sealed class TreeEntryItem : IEquatable<TreeEntryItem>
     /// <summary>Asynchronously gets the entry associated with the tree entry item.</summary>
     /// <returns>The entry associated with the tree entry item.</returns>
     public async Task<TEntry> GetEntryAsync<TEntry>() where TEntry : Entry =>
-        (_entry ??= await _entryProvider()) as TEntry ??
+        (_entry ??= await _entryProvider(Id)) as TEntry ??
         throw new InvalidOperationException($"Expected a {typeof(TEntry).Name} entry.");
 
     /// <summary>Gets the item with the specified relative path.</summary>
