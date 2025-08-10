@@ -60,6 +60,10 @@ public static class ServiceConfiguration
             new FileOffsetStreamReader(path,
                                        sp.GetRequiredService<IFileSystem>().FileInfo.New(path).Length))
         .AddScoped<CurrentOperationReaderFactory>(sp => info => new(info))
+        .AddScoped<PackManagerFactory>(sp => path =>
+            new PackManager(path,
+                            sp.GetRequiredService<IFileSystem>(),
+                            sp.GetRequiredService<PackReaderFactory>()))
         .AddScoped<IndexReaderFactory>(sp => (path, entryProvider) =>
             new(path,
                 entryProvider,
@@ -70,9 +74,8 @@ public static class ServiceConfiguration
             new ObjectResolver(
                 path, useReadCommitGraph,
                 sp.GetRequiredService<IOptions<GitConnection.Options>>(),
-                sp.GetRequiredService<IPackManager>(),
+                sp.GetRequiredService<PackManagerFactory>(),
                 sp.GetRequiredService<LooseReaderFactory>(),
-                sp.GetRequiredService<PackReaderFactory>(),
                 sp.GetRequiredService<LfsReaderFactory>(),
                 sp.GetRequiredService<CommitGraphReaderFactory>(),
                 sp.GetRequiredService<IMemoryCache>(),
@@ -93,9 +96,7 @@ public static class ServiceConfiguration
                                    sp.GetRequiredService<FileOffsetStreamReaderFactory>()))
         .AddScoped<PackReaderFactory>(sp => (string path) =>
             new(sp.GetRequiredService<FileOffsetStreamReaderFactory>().Invoke(path),
-                sp.GetRequiredService<IOptions<GitConnection.Options>>(),
-                sp.GetRequiredService<PackIndexFactory>(),
-                sp.GetRequiredService<IMemoryCache>()))
+                sp.GetRequiredService<PackIndexFactory>()))
         .AddScoped<PackIndexFactory>(sp => async path =>
             await PackIndexReader.LoadAsync(path, sp.GetRequiredService<IFileSystem>()))
         .AddScoped<IPackManager, PackManager>();

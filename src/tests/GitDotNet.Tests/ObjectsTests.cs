@@ -2,7 +2,6 @@ using System.IO.Abstractions.TestingHelpers;
 using System.IO.Compression;
 using FakeItEasy;
 using FluentAssertions;
-using FluentAssertions.Execution;
 using GitDotNet.Readers;
 using GitDotNet.Tests.Properties;
 using Microsoft.Extensions.Caching.Memory;
@@ -29,9 +28,8 @@ public class ObjectsTests
         });
         var sut = new ObjectResolver(".git", useReadCommitGraph: true,
             options: Options.Create(new GitConnection.Options()),
-            packManager: null!,
+            packManagerFactory: Path => A.Fake<IPackManager>(),
             looseReaderFactory: _ => looseReader,
-            packReaderFactory: _ => throw new NotImplementedException(),
             lfsReaderFactory: path => CreateLfsReader(path, fileSystem),
             commitReaderFactory: (_, _) => throw new NotImplementedException(),
             memoryCache: A.Fake<IMemoryCache>(),

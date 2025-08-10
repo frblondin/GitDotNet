@@ -37,10 +37,10 @@ public class ReadRandomBlobsBenchmark
     {
         var result = new ConcurrentBag<HashId>();
         using var connection = provider(Path);
-        foreach (var pack in ((IObjectResolverInternal)connection.Objects).PackReaders.Values)
+        foreach (var pack in ((IObjectResolverInternal)connection.Objects).PackManager.PackReaders)
         {
             if (result.Count >= 1_000) break;
-            await foreach (var (_, hash) in pack.Value.GetHashesAsync())
+            await foreach (var (_, hash) in pack.GetHashesAsync())
             {
                 if (result.Count >= 1_000) break;
                 var entry = await connection.Objects.GetAsync<Entry>(hash);

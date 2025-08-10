@@ -1,6 +1,5 @@
 using GitDotNet.Tools;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 
@@ -8,11 +7,14 @@ namespace GitDotNet.Readers;
 
 internal delegate PackReader PackReaderFactory(string path);
 
-internal class PackReader(IFileOffsetStreamReader offsetStreamReader, IOptions<GitConnection.Options> options, PackIndexFactory indexFactory, IMemoryCache memoryCache) : IDisposable
+internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexFactory indexFactory) : IDisposable
 {
     private PackIndexReader? _index;
+    private ConcurrentDictionary<long, Task<UnlinkedEntry>> _cache = new();
     private bool _disposedValue;
     private readonly CancellationTokenSource _disposed = new();
+
+    internal bool IsObsolete { get; set; }
 
     public async Task<int> IndexOfAsync(HashId id)
     {
@@ -36,13 +38,10 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, IOptions<G
                                                Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider) =>
         await GetByOffsetAsync(offset, async () => await ReadAsync(id, offset, dependentEntryProvider));
 
-    private async Task<UnlinkedEntry> GetByOffsetAsync(long offset, Func<Task<UnlinkedEntry>> provider) =>
-        (await memoryCache.GetOrCreateAsync((offsetStreamReader.Path, offset), async entry =>
-        {
-            var result = await provider();
-            options.Value.ApplyTo(entry, result, _disposed.Token);
-            return result;
-        }))!;
+    private Task<UnlinkedEntry> GetByOffsetAsync(long offset, Func<Task<UnlinkedEntry>> provider) =>
+        _cache.TryGetValue(offset, out var result) ?
+        result :
+        _cache.GetOrAdd(offset, provider());
 
     private async Task<UnlinkedEntry> ReadAsync(HashId id,
                                                 long offset,
@@ -263,6 +262,7 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, IOptions<G
         {
             if (disposing)
             {
+                IsObsolete = true;
                 if (!_disposed.IsCancellationRequested) _disposed.Cancel();
                 _disposed.Dispose();
                 offsetStreamReader.Dispose();

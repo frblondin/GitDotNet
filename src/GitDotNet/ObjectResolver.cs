@@ -16,21 +16,16 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     private readonly bool _useReadCommitGraph;
     private readonly IOptions<GitConnection.Options> _options;
     private readonly LooseReader _looseObjects;
-    private readonly PackReaderFactory _packReaderFactory;
     private readonly Lazy<CommitGraphReader?> _commitReader;
     private readonly LfsReader _lfsReader;
     private readonly IMemoryCache _memoryCache;
-    private readonly IPackManager _packManager;
     private readonly CancellationTokenSource _disposed = new();
     private bool _disposedValue;
-    private ImmutableDictionary<string, Lazy<PackReader>> _packReaders = ImmutableDictionary<string, Lazy<PackReader>>.Empty;
-    private DateTime? _lastInfoPacksTimestamp;
 
     internal ObjectResolver(string repositoryPath, bool useReadCommitGraph,
                             IOptions<GitConnection.Options> options,
-                            IPackManager packManager,
+                            PackManagerFactory packManagerFactory,
                             LooseReaderFactory looseReaderFactory,
-                            PackReaderFactory packReaderFactory,
                             LfsReaderFactory lfsReaderFactory,
                             CommitGraphReaderFactory commitReaderFactory,
                             IMemoryCache memoryCache,
@@ -40,29 +35,16 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         _useReadCommitGraph = useReadCommitGraph;
         _options = options;
         _looseObjects = looseReaderFactory(Path);
-        _packReaderFactory = packReaderFactory;
         _commitReader = new(() => commitReaderFactory(Path, this));
         _lfsReader = lfsReaderFactory(fileSystem.Path.Combine(repositoryPath, "lfs", "objects"));
         _memoryCache = memoryCache;
-        _packManager = packManager;
+        PackManager = packManagerFactory(Path);
     }
 
     /// <summary>Gets the path to the Git objects directory.</summary>
     public string Path { get; init; }
 
-    public ImmutableDictionary<string, Lazy<PackReader>> PackReaders
-    {
-        get
-        {
-            (_packReaders, _lastInfoPacksTimestamp) = _packManager.UpdatePacksIfNeeded(
-                Path,
-                _packReaders,
-                _lastInfoPacksTimestamp,
-                _packReaderFactory);
-            return _packReaders;
-        }
-        private set => _packReaders = value;
-    }
+    public IPackManager PackManager { get; }
 
     [ExcludeFromCodeCoverage]
     async Task<byte[]> IObjectResolverInternal.GetDataAsync(HashId id) => (await GetUnlinkedEntryAsync(id, throwIfNotFound: true)).Data;
@@ -165,7 +147,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     {
         var foundPack = default(PackReader?);
         var foundIndex = -1;
-        foreach (var pack in PackReaders.Values.Select(p => p.Value))
+        foreach (var pack in PackManager.PackReaders)
         {
             var index = await pack.IndexOfAsync(id);
             if (index != -1)
@@ -176,7 +158,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
                 if (id.Hash.Count >= HashLength) return (foundPack, foundIndex);
             }
         }
-        if (foundPack is null && throwIfNotFound) throw new KeyNotFoundException($"Hash {id} not found in any pack.");
+        if (foundPack is null && throwIfNotFound) throw new KeyNotFoundException($"Hash {id} could not be found.");
         return (foundPack, foundIndex);
     }
 
@@ -201,7 +183,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
             {
                 if (_commitReader.IsValueCreated)
                     _commitReader.Value?.Dispose();
-                _packManager.DisposePacks(_packReaders);
+                PackManager.Dispose();
             }
             if (!(_disposed?.IsCancellationRequested ?? false))
                 _disposed!.Cancel();
@@ -244,9 +226,9 @@ public interface IObjectResolver : IDisposable
 
 internal interface IObjectResolverInternal
 {
+    IPackManager PackManager { get; }
+
     Task<byte[]> GetDataAsync(HashId id);
 
     Task<TEntry> GetAsync<TEntry>(HashId id) where TEntry : Entry;
-
-    ImmutableDictionary<string, Lazy<PackReader>> PackReaders { get; }
 }
