@@ -27,8 +27,7 @@ internal static class TreeEntryReader
             var hash = data.AsSpan(index, 20).ToArray();
             index += 20;
 
-            var item = new TreeEntryItem(new FileMode(mode), name, hash,
-                async () => await objectResolver.GetAsync<Entry>(hash));
+            var item = new TreeEntryItem(new FileMode(mode), name, hash, objectResolver.GetAsync<Entry>);
             items.Add(item);
         }
 

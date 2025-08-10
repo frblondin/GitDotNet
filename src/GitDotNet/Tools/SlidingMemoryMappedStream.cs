@@ -24,9 +24,7 @@ internal class SlidingMemoryMappedStream : Stream
     private void CreateView(long offset)
     {
         // Use Read access to allow concurrent reads, fail if a write is in progress (default for MemoryMappedFileAccess.Read)
-        var view = _memoryMappedFile.CreateViewStream(offset,
-                                                      Math.Min(ViewSize, Length - offset),
-                                                      MemoryMappedFileAccess.Read);
+        var view = _memoryMappedFile.CreateViewStream(offset, Math.Min(ViewSize, Length - offset), MemoryMappedFileAccess.Read);
         _views.Add(view);
     }
 
