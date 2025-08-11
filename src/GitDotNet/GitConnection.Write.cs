@@ -28,6 +28,7 @@ public partial class GitConnection
 
         // Execute the CLI command and get the output
         GitCliCommand.Execute(Info.RootFilePath, command, updateEnvironmentVariables: AddCommitter);
+        (Objects as IObjectResolverInternal)?.PackManager.UpdatePacks(force: true);
 
         return await Head.GetTipAsync();
 
@@ -74,6 +75,8 @@ public partial class GitConnection
         await transformations(composer);
 
         var result = await composer.CommitAsync(canonicalName, commit, options);
+        (Objects as IObjectResolverInternal)?.PackManager.UpdatePacks(force: true);
+
         return await Objects.GetAsync<CommitEntry>(result!);
     }
 
