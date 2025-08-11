@@ -58,28 +58,46 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
 
     private async Task<UnlinkedEntry?> ReadUnlinkedEntryAsync(ICacheEntry entry, HashId id, bool throwIfNotFound)
     {
+        const int attempts = 3;
+        const int delayInMs = 200;
+
+        var result = default(UnlinkedEntry?);
+        for (int i = 0; i < attempts; i++)
+        {
+            result = await TryReadUnlinkedEntryAsync(id, throwIfNotFound, attempts, i);
+            if (result is null && i < attempts - 1)
+            {
+                // Protect against filesystem changes not being immediately visible
+                await Task.Delay(delayInMs);
+                continue;
+            }
+        }
+
+        _options.Value.ApplyTo(entry, result, _disposed.Token);
+
+        // Ensure the hash is correct, it may be null if produced through OFS delta within a pack from offset.
+        return result is null || result.Id.Hash.Count > 0 ? result : result with { Id = id };
+    }
+
+    private async Task<UnlinkedEntry?> TryReadUnlinkedEntryAsync(HashId id, bool throwIfNotFound, int attempts, int i)
+    {
         ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(ObjectResolver));
 
         // Read loose object
         var hexString = id.ToString();
         var (type, dataProvider, length) = _looseObjects.TryLoad(hexString);
-        UnlinkedEntry? result;
         if (dataProvider is not null)
         {
             using var stream = dataProvider();
-            result = new UnlinkedEntry(type, id, await stream.ToArrayAsync(length));
+            return new UnlinkedEntry(type, id, await stream.ToArrayAsync(length));
         }
         else
         {
-            result = await LoadFromPacksAsync(id, GetDependentObjectAsync, throwIfNotFound);
+            return await LoadFromPacksAsync(id, GetDependentObjectAsync, throwIfNotFound && i == attempts - 1);
         }
-        _options.Value.ApplyTo(entry, result, _disposed.Token);
-
-        // Ensure the hash is correct, it may be null if produced through OFS delta within a pack from offset.
-        return result is null || result.Id.Hash.Count > 0 ? result : result with { Id = id };
-
-        async Task<UnlinkedEntry> GetDependentObjectAsync(HashId h) => await GetUnlinkedEntryAsync(h, throwIfNotFound: true);
     }
+
+    private async Task<UnlinkedEntry> GetDependentObjectAsync(HashId h) => await GetUnlinkedEntryAsync(h, throwIfNotFound: true);
 
     public async Task<TEntry> GetAsync<TEntry>(HashId id) where TEntry : Entry =>
         (await _memoryCache.GetOrCreateAsync((id, typeof(TEntry) == typeof(LogEntry) ? nameof(LogEntry) : nameof(Entry)),
