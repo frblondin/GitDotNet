@@ -69,6 +69,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
             {
                 // Protect against filesystem changes not being immediately visible
                 await Task.Delay(delayInMs);
+                PackManager.UpdatePacks(force: true);
                 continue;
             }
         }
