@@ -62,11 +62,15 @@ public partial class GitConnection : IDisposable
         {
             var headContent = _fileSystem.File.ReadAllText(Path.Combine(Info.Path, "HEAD")).Trim();
             var match = HeadRefRegex().Match(headContent);
-            if (!match.Success)
+            if (match.Success)
             {
-                throw new InvalidOperationException($"Invalid HEAD reference format:\n\n{headContent}");
+                return Branches[match.Groups[1].Value];
             }
-            return Branches[match.Groups[1].Value];
+            if (HashId.TryParse(headContent, out var headId))
+            {
+                return new DetachedHead(this, headId);
+            }
+            throw new InvalidOperationException(@$"Invalid HEAD reference format: ""{headContent}""");
         }
     }
 

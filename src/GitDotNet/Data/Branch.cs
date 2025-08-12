@@ -8,7 +8,7 @@ using GitDotNet.Tools;
 namespace GitDotNet;
 
 /// <summary>Represents a Git branch.</summary>
-public sealed class Branch : IAsyncEnumerable<LogEntry>, IComparable<Branch>, IEquatable<Branch>
+public class Branch : IAsyncEnumerable<LogEntry>, IComparable<Branch>, IEquatable<Branch>
 {
     private readonly Func<HashId> _tipProvider;
 
