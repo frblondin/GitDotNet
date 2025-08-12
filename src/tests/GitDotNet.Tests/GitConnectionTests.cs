@@ -63,6 +63,25 @@ public class GitConnectionTests
     }
 
     [Test]
+    public void ShouldReturnDetachedHead()
+    {
+        // Arrange
+        var fileSystem = default(MockFileSystem);
+        using var sut = CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git");
+        fileSystem!.AddFile(".git/HEAD", new MockFileData("1aad9b571c0b84031191ab76e06fae4ba1f981bc"));
+
+        // Act
+        var head = sut.Head;
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            head.Should().BeOfType<DetachedHead>();
+            head.Tip!.ToString().Should().Be("1aad9b571c0b84031191ab76e06fae4ba1f981bc");
+        });
+    }
+
+    [Test]
     public void Clone()
     {
         // Arrange
