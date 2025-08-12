@@ -59,12 +59,12 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     private async Task<UnlinkedEntry?> ReadUnlinkedEntryAsync(ICacheEntry entry, HashId id, bool throwIfNotFound)
     {
         const int attempts = 3;
-        const int delayInMs = 200;
+        const int delayInMs = 100;
 
         var result = default(UnlinkedEntry?);
         for (int i = 0; i < attempts; i++)
         {
-            result = await TryReadUnlinkedEntryAsync(id, throwIfNotFound, attempts, i);
+            result = await TryReadUnlinkedEntryAsync(id, throwIfNotFound && i == attempts - 1);
             if (result is null && i < attempts - 1)
             {
                 // Protect against filesystem changes not being immediately visible
@@ -80,9 +80,9 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         return result is null || result.Id.Hash.Count > 0 ? result : result with { Id = id };
     }
 
-    private async Task<UnlinkedEntry?> TryReadUnlinkedEntryAsync(HashId id, bool throwIfNotFound, int attempts, int i)
+    private async Task<UnlinkedEntry?> TryReadUnlinkedEntryAsync(HashId id, bool throwIfNotFound)
     {
-        ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(ObjectResolver));
+        ObjectDisposedException.ThrowIf(_disposedValue, this);
 
         // Read loose object
         var hexString = id.ToString();
@@ -94,7 +94,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         }
         else
         {
-            return await LoadFromPacksAsync(id, GetDependentObjectAsync, throwIfNotFound && i == attempts - 1);
+            return await LoadFromPacksAsync(id, GetDependentObjectAsync, throwIfNotFound);
         }
     }
 
@@ -111,7 +111,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
 
     private async Task<TEntry?> ReadAsync<TEntry>(ICacheEntry entry, HashId id, bool throwIfNotFound) where TEntry : Entry
     {
-        ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(ObjectResolver));
+        ObjectDisposedException.ThrowIf(_disposedValue, this);
 
         TEntry? result = null;
         if (typeof(TEntry) == typeof(LogEntry))
@@ -202,7 +202,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
             {
                 if (_commitReader.IsValueCreated)
                     _commitReader.Value?.Dispose();
-                PackManager.Dispose();
+                PackManager?.Dispose();
             }
             if (!(_disposed?.IsCancellationRequested ?? false))
                 _disposed!.Cancel();
