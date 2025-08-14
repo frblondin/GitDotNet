@@ -36,21 +36,16 @@ internal class PackManager(string path, IFileSystem fileSystem, PackReaderFactor
     /// <summary>Updates pack readers based on the current state of pack files.</summary>
     public void UpdatePacks(bool force)
     {
-        var packDir = fileSystem.Path.Combine(path, "pack");
-        DateTime? currentTimestamp = fileSystem.Directory.Exists(packDir) ?
-            fileSystem.Directory.GetFiles(packDir, "*.pack")
-                .Select(file => fileSystem.File.GetLastWriteTimeUtc(file))
-                .DefaultIfEmpty(DateTime.MinValue)
-                .Max() is var maxTime && maxTime != DateTime.MinValue ? maxTime : null :
-            null;
-        
-        if (!force && _lastInfoPacksTimestamp != null && _lastInfoPacksTimestamp == currentTimestamp) 
+        if (_lastInfoPacksTimestamp != null && !force)
+        {
+            // If the last timestamp is not null and force is false, we can skip the update.
             return;
-
+        }
+        var packDir = fileSystem.Path.Combine(path, "pack");
         var validPackNames = AddFromPackDir(packDir);
 
         MarkPacksAsObsolete(validPackNames);
-        _lastInfoPacksTimestamp = currentTimestamp;
+        _lastInfoPacksTimestamp = DateTime.Now;
     }
 
     private HashSet<string> AddFromPackDir(string packDir)

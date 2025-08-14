@@ -82,7 +82,7 @@ var tree = await commit.GetTreeAsync();
 
 | Method                         | Mean    | Error   | StdDev   |
 |------------------------------- |--------:|--------:|---------:|
-| GitDotNet                      | 6.200 s | 2.676 s | 0.1467 s |
+| GitDotNet                      | 5.459 s | 2.093 s | 0.1147 s |
 | git archive -o result.zip HEAD | 7.357 s | 6.893 s | 0.3778 s |
 
 ## Contributing
