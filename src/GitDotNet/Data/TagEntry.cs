@@ -32,7 +32,7 @@ public sealed class TagEntry : Entry
     /// <summary>Asynchronously gets the target object associated with the tag.</summary>
     /// <returns>The target object associated with the tag.</returns>
     public async Task<Entry> GetTargetAsync() =>
-        _target ??= await _objectResolver.GetAsync<Entry>(_content.Value.Object.HexToByteArray());
+        _target ??= await _objectResolver.GetAsync<Entry>(_content.Value.Object.HexToByteArray()).ConfigureAwait(false);
 
     private Content Parse()
     {

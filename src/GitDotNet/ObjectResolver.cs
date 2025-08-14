@@ -47,28 +47,28 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     public IPackManager PackManager { get; }
 
     [ExcludeFromCodeCoverage]
-    async Task<byte[]> IObjectResolverInternal.GetDataAsync(HashId id) => (await GetUnlinkedEntryAsync(id, throwIfNotFound: true)).Data;
+    async Task<byte[]> IObjectResolverInternal.GetDataAsync(HashId id) => (await GetUnlinkedEntryAsync(id, throwIfNotFound: true).ConfigureAwait(false)).Data;
 
     [ExcludeFromCodeCoverage]
-    internal async Task<UnlinkedEntry> GetUnlinkedEntryAsync(HashId id) => await GetUnlinkedEntryAsync(id, throwIfNotFound: true);
+    internal async Task<UnlinkedEntry> GetUnlinkedEntryAsync(HashId id) => await GetUnlinkedEntryAsync(id, throwIfNotFound: true).ConfigureAwait(false);
 
     internal async Task<UnlinkedEntry> GetUnlinkedEntryAsync(HashId id, bool throwIfNotFound) =>
         (await _memoryCache.GetOrCreateAsync((id, nameof(UnlinkedEntry)),
-            async entry => await ReadUnlinkedEntryAsync(entry, id, throwIfNotFound)))!;
+            async entry => await ReadUnlinkedEntryAsync(entry, id, throwIfNotFound).ConfigureAwait(false)).ConfigureAwait(false))!;
 
     private async Task<UnlinkedEntry?> ReadUnlinkedEntryAsync(ICacheEntry entry, HashId id, bool throwIfNotFound)
     {
-        const int attempts = 3;
+        const int attempts = 1;
         const int delayInMs = 100;
 
         var result = default(UnlinkedEntry?);
         for (int i = 0; i < attempts; i++)
         {
-            result = await ReadUnlinkedEntryAsync(id, throwIfNotFound && i == attempts - 1);
+            result = await ReadUnlinkedEntryAsync(id, throwIfNotFound && i == attempts - 1).ConfigureAwait(false);
             if (result is null && i < attempts - 1)
             {
                 // Protect against filesystem changes not being immediately visible
-                await Task.Delay(delayInMs);
+                await Task.Delay(delayInMs).ConfigureAwait(false);
                 PackManager.UpdatePacks(force: true);
                 continue;
             }
@@ -90,24 +90,23 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         if (dataProvider is not null)
         {
             using var stream = dataProvider();
-            return new UnlinkedEntry(type, id, await stream.ToArrayAsync(length));
+            return new UnlinkedEntry(type, id, await stream.ToArrayAsync(length).ConfigureAwait(false));
         }
         else
         {
-            return await LoadFromPacksAsync(id, GetDependentObjectAsync, throwIfNotFound);
+            return await LoadFromPacksAsync(id, GetDependentObjectAsync, throwIfNotFound).ConfigureAwait(false);
         }
     }
 
-    private async Task<UnlinkedEntry> GetDependentObjectAsync(HashId h) => await GetUnlinkedEntryAsync(h, throwIfNotFound: true);
+    private async Task<UnlinkedEntry> GetDependentObjectAsync(HashId h) => await GetUnlinkedEntryAsync(h, throwIfNotFound: true).ConfigureAwait(false);
 
     public async Task<TEntry> GetAsync<TEntry>(HashId id) where TEntry : Entry =>
         (await _memoryCache.GetOrCreateAsync((id, typeof(TEntry) == typeof(LogEntry) ? nameof(LogEntry) : nameof(Entry)),
-                                             async entry => await ReadAsync<TEntry>(entry, id, true)))!;
+                                             async entry => await ReadAsync<TEntry>(entry, id, true).ConfigureAwait(false)).ConfigureAwait(false))!;
 
     public async Task<TEntry?> TryGetAsync<TEntry>(HashId id) where TEntry : Entry =>
         await _memoryCache.GetOrCreateAsync((id, typeof(TEntry) == typeof(LogEntry) ? nameof(LogEntry) : nameof(Entry)),
-                                            async entry => await ReadAsync<TEntry>(entry, id, false));
-
+                                            async entry => await ReadAsync<TEntry>(entry, id, false).ConfigureAwait(false)).ConfigureAwait(false);
 
     private async Task<TEntry?> ReadAsync<TEntry>(ICacheEntry entry, HashId id, bool throwIfNotFound) where TEntry : Entry
     {
@@ -116,11 +115,11 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         TEntry? result = null;
         if (typeof(TEntry) == typeof(LogEntry))
         {
-            result = await ReadLogEntryAsync(id, result);
+            result = await ReadLogEntryAsync(id, result).ConfigureAwait(false);
         }
         else
         {
-            var unlinked = await GetUnlinkedEntryAsync(id, throwIfNotFound);
+            var unlinked = await GetUnlinkedEntryAsync(id, throwIfNotFound).ConfigureAwait(false);
             result = unlinked is not null ? (TEntry)CreateEntry(unlinked) : null;
         }
         _options.Value.ApplyTo(entry, result, _disposed.Token);
@@ -141,7 +140,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         }
         if (result is null)
         {
-            var commit = await TryGetAsync<CommitEntry>(id);
+            var commit = await TryGetAsync<CommitEntry>(id).ConfigureAwait(false);
             if (commit is not null)
             {
                 var signature = commit.Committer ??
@@ -157,9 +156,9 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
 
     private async Task<UnlinkedEntry?> LoadFromPacksAsync(HashId id, Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider, bool throwIfNotFound)
     {
-        var (pack, index) = await FindPackAsync(id, throwIfNotFound);
+        var (pack, index) = await FindPackAsync(id, throwIfNotFound).ConfigureAwait(false);
         if (pack is null) return null;
-        return await pack.GetAsync(index, id, dependentEntryProvider);
+        return await pack.GetAsync(index, id, dependentEntryProvider).ConfigureAwait(false);
     }
 
     private async Task<(PackReader? pack, int index)> FindPackAsync(HashId id, bool throwIfNotFound)
@@ -168,7 +167,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         var foundIndex = -1;
         foreach (var pack in PackManager.PackReaders)
         {
-            var index = await pack.IndexOfAsync(id);
+            var index = await pack.IndexOfAsync(id).ConfigureAwait(false);
             if (index != -1)
             {
                 if (id.Hash.Count < HashLength && foundPack is not null) throw new AmbiguousHashException();

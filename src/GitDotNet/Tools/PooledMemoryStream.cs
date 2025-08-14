@@ -133,7 +133,7 @@ public class PooledMemoryStream(int initialCapacity = 4096) : Stream
         var remaining = count;
         while (remaining > 0)
         {
-            var read = await stream.ReadAsync(_buffer.AsMemory(_position, remaining));
+            var read = await stream.ReadAsync(_buffer.AsMemory(_position, remaining)).ConfigureAwait(false);
             if (read == 0) break;
             remaining -= read;
             _position += read;

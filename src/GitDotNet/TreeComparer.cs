@@ -18,7 +18,7 @@ internal class TreeComparer(IOptions<GitConnection.Options> options) : ITreeComp
 
         FindModifiedBlobsUsingIds(result, oldBlobs, newBlobs);
         FindRenamedBlobsWithSameId(result, oldBlobs, newBlobs);
-        await FindRenamedBlobsWithSimilarity(options, result);
+        await FindRenamedBlobsWithSimilarity(options, result).ConfigureAwait(false);
 
         return [.. result.OrderBy(c => c.NewPath ?? c.OldPath)];
     }
@@ -27,11 +27,11 @@ internal class TreeComparer(IOptions<GitConnection.Options> options) : ITreeComp
     {
         var channel = Channel.CreateUnbounded<BlobEntryPath>();
         var task = GetDivergingBlobEntries(channel, tree, other, new Stack<string>());
-        await foreach (var result in channel.Reader.ReadAllAsync())
+        await foreach (var result in channel.Reader.ReadAllAsync().ConfigureAwait(false))
         {
             yield return result;
         }
-        await task;
+        await task.ConfigureAwait(false);
     }
 
     private static async Task GetDivergingBlobEntries(Channel<BlobEntryPath> channel, TreeEntry tree, TreeEntry? other, Stack<string> path)
@@ -41,17 +41,17 @@ internal class TreeComparer(IOptions<GitConnection.Options> options) : ITreeComp
             path.Push(item.Name);
             if (item.Mode.Type == ObjectType.Tree)
             {
-                var child = await item.GetEntryAsync<TreeEntry>();
+                var child = await item.GetEntryAsync<TreeEntry>().ConfigureAwait(false);
 
                 // Look for tree with same name, meaning that a nested object has been modified
                 var otherItem = other?.Children.FirstOrDefault(t => t.Name == item.Name && t.Mode.Type == ObjectType.Tree);
-                var otherChild = otherItem is not null ? await otherItem.GetEntryAsync<TreeEntry>() : null;
+                var otherChild = otherItem is not null ? await otherItem.GetEntryAsync<TreeEntry>().ConfigureAwait(false) : null;
 
-                await GetDivergingBlobEntries(channel, child, otherChild, path);
+                await GetDivergingBlobEntries(channel, child, otherChild, path).ConfigureAwait(false);
             }
             if (item.Mode.Type == ObjectType.RegularFile)
             {
-                await channel.Writer.WriteAsync((path.Reverse().ToArray(), item));
+                await channel.Writer.WriteAsync((path.Reverse().ToArray(), item)).ConfigureAwait(false);
             }
             path.Pop();
         }
@@ -158,7 +158,7 @@ internal class TreeComparer(IOptions<GitConnection.Options> options) : ITreeComp
         var chunkCache = new Dictionary<BlobEntry, HashSet<int>>();
         foreach (var removedItem in removedItems)
         {
-            await FindSimilarRenamedBlobs(options, result, addedItems, removedItem, chunkCache);
+            await FindSimilarRenamedBlobs(options, result, addedItems, removedItem, chunkCache).ConfigureAwait(false);
         }
     }
 
@@ -166,8 +166,8 @@ internal class TreeComparer(IOptions<GitConnection.Options> options) : ITreeComp
     {
         foreach (var addedItem in addedItems)
         {
-            var removedEntry = await removedItem.Old!.GetEntryAsync<BlobEntry>();
-            var addedEntry = await addedItem.New!.GetEntryAsync<BlobEntry>();
+            var removedEntry = await removedItem.Old!.GetEntryAsync<BlobEntry>().ConfigureAwait(false);
+            var addedEntry = await addedItem.New!.GetEntryAsync<BlobEntry>().ConfigureAwait(false);
 
             // If size difference is too big, skip levenshtein distance calculation
             if (removedEntry.Data.Length > 0 || addedEntry.Data.Length > 0)

@@ -55,14 +55,14 @@ public class CommitEntry : Entry
     [ExcludeFromCodeCoverage]
     public async Task<TreeEntry> GetRootTreeAsync() => _tree ??=
         _treeId != null || !string.IsNullOrEmpty(_content.Value.Tree) ?
-        await _objectResolver.GetAsync<TreeEntry>(_treeId ?? _content.Value.Tree.HexToByteArray()) :
+        await _objectResolver.GetAsync<TreeEntry>(_treeId ?? _content.Value.Tree.HexToByteArray()).ConfigureAwait(false) :
         throw new InvalidOperationException("Cannot get tree from a new empty commit.");
 
     /// <summary>Asynchronously gets the parent commits of the current commit.</summary>
     /// <returns>A list of parent commits.</returns>
     public async Task<IList<CommitEntry>> GetParentsAsync()
     {
-        return _parents ??= await LookupParents();
+        return _parents ??= await LookupParents().ConfigureAwait(false);
 
         async Task<IList<CommitEntry>> LookupParents()
         {
@@ -70,7 +70,7 @@ public class CommitEntry : Entry
             var parents = ImmutableList.CreateBuilder<CommitEntry>();
             foreach (var parent in _parentIds)
             {
-                var commit = await _objectResolver.GetAsync<CommitEntry>(parent);
+                var commit = await _objectResolver.GetAsync<CommitEntry>(parent).ConfigureAwait(false);
                 parents.Add(commit);
             }
             return parents.ToImmutable();

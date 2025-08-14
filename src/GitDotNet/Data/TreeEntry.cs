@@ -26,7 +26,7 @@ public class TreeEntry : Entry
         var child = Children.FirstOrDefault(x => x.Name.Equals(path.Root, StringComparison.Ordinal));
         if (child is not null && path.Length > 1)
         {
-            return await child.GetRelativePathAsync(path.ChildPath);
+            return await child.GetRelativePathAsync(path.ChildPath).ConfigureAwait(false);
         }
         return child;
     }
@@ -38,7 +38,7 @@ public class TreeEntry : Entry
     {
         foreach (var child in Children)
         {
-            var path = await child.TryGetRelativePathToAsync(entry);
+            var path = await child.TryGetRelativePathToAsync(entry).ConfigureAwait(false);
             if (path is not null)
                 return path;
         }
@@ -52,8 +52,8 @@ public class TreeEntry : Entry
     public async IAsyncEnumerable<(GitPath Path, TreeEntryItem BlobEntry)> GetAllBlobEntriesAsync(GitPath? basePath = null, CancellationToken cancellationToken = default)
     {
         var channel = Channel.CreateUnbounded<(GitPath Path, TreeEntryItem Stream)>();
-        var task = GetAllBlobEntriesAsync(channel, x => x, basePath, cancellationToken);
-        await foreach (var result in channel.Reader.ReadAllAsync())
+        var task = GetAllBlobEntriesAsync(channel, x => x, basePath, cancellationToken).ConfigureAwait(false);
+        await foreach (var result in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
         {
             yield return result;
         }
@@ -73,7 +73,7 @@ public class TreeEntry : Entry
         foreach (var child in Children)
         {
             path.Add(child.Name);
-            await child.GetAllBlobEntriesAsync(channel, func, path, cancellationToken);
+            await child.GetAllBlobEntriesAsync(channel, func, path, cancellationToken).ConfigureAwait(false);
             path.RemoveAt(path.Count - 1);
         }
         channel.Writer.Complete();

@@ -18,25 +18,25 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
 
     public async Task<int> IndexOfAsync(HashId id)
     {
-        var indexReader = await EnsureIndex();
-        return await indexReader.GetIndexOfAsync(id);
+        var indexReader = await EnsureIndex().ConfigureAwait(false);
+        return await indexReader.GetIndexOfAsync(id).ConfigureAwait(false);
     }
 
     private async Task<PackIndexReader> EnsureIndex() =>
-        _index ??= await indexFactory(Path.ChangeExtension(offsetStreamReader.Path, "idx"));
+        _index ??= await indexFactory(Path.ChangeExtension(offsetStreamReader.Path, "idx")).ConfigureAwait(false);
 
     public async Task<UnlinkedEntry> GetAsync(int indexPosition, HashId id, Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider)
     {
-        var index = await EnsureIndex();
-        var offset = await index.GetPackFileOffsetAsync(indexPosition);
+        var index = await EnsureIndex().ConfigureAwait(false);
+        var offset = await index.GetPackFileOffsetAsync(indexPosition).ConfigureAwait(false);
 
-        return await GetByOffsetAsync(offset, async () => await ReadAsync(id, offset, dependentEntryProvider));
+        return await GetByOffsetAsync(offset, async () => await ReadAsync(id, offset, dependentEntryProvider).ConfigureAwait(false)).ConfigureAwait(false);
     }
 
     private async Task<UnlinkedEntry> GetAsync(HashId id,
                                                long offset,
                                                Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider) =>
-        await GetByOffsetAsync(offset, async () => await ReadAsync(id, offset, dependentEntryProvider));
+        await GetByOffsetAsync(offset, async () => await ReadAsync(id, offset, dependentEntryProvider).ConfigureAwait(false)).ConfigureAwait(false);
 
     private Task<UnlinkedEntry> GetByOffsetAsync(long offset, Func<Task<UnlinkedEntry>> provider) =>
         _cache.TryGetValue(offset, out var result) ?
@@ -50,7 +50,7 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
         ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(PackReader));
 
         using var stream = offsetStreamReader.OpenRead(offset);
-        return await ReadAsync(stream, id, offset, dependentEntryProvider);
+        return await ReadAsync(stream, id, offset, dependentEntryProvider).ConfigureAwait(false);
     }
 
     private async Task<UnlinkedEntry> ReadAsync(Stream stream,
@@ -61,8 +61,8 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
 #if FILL_OFFSET_HASH_WHEN_MISSING
         if ((hash?.Length ?? 0) == 0)
         {
-            var indexReader = await EnsureIndex();
-            hash = await indexReader.GetHashAsync(offset);
+            var indexReader = await EnsureIndex().ConfigureAwait(false);
+            hash = await indexReader.GetHashAsync(offset).ConfigureAwait(false);
         }
 #endif
 
@@ -82,19 +82,19 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
         return type switch
         {
             >= EntryType.Commit and <= EntryType.Tag =>
-                new(type, id, await ReadDataAsync(stream, length)),
+                new(type, id, await ReadDataAsync(stream, length).ConfigureAwait(false)),
             EntryType.RefDelta =>
                 // Lazy load is not possible since we need to read base objects to get type
-                await ReconstructRefDeltaAsync(stream, dependentEntryProvider),
+                await ReconstructRefDeltaAsync(stream, dependentEntryProvider).ConfigureAwait(false),
             EntryType.OfsDelta =>
                 // Lazy load is not possible since we need to read base objects to get type
-                await ReconstructOfsDeltaAsync(stream, id, offset, dependentEntryProvider),
+                await ReconstructOfsDeltaAsync(stream, id, offset, dependentEntryProvider).ConfigureAwait(false),
             _ => throw new NotImplementedException($"Unknown type {(int)type} while getting object."),
         };
         static async Task<byte[]> ReadDataAsync(Stream stream, long length)
         {
             var result = new ZLibStream(stream, CompressionMode.Decompress, leaveOpen: true);
-            return await result.ToArrayAsync(length);
+            return await result.ToArrayAsync(length).ConfigureAwait(false);
         }
     }
 
@@ -104,9 +104,9 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
                                                                Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider)
     {
         var baseObjectOffset = ExtractOffset(stream);
-        var baseObject = await GetAsync(HashId.Empty, offset - baseObjectOffset, dependentEntryProvider);
+        var baseObject = await GetAsync(HashId.Empty, offset - baseObjectOffset, dependentEntryProvider).ConfigureAwait(false);
 
-        var data = await ReconstructDeltaAsync(stream, baseObject.Data);
+        var data = await ReconstructDeltaAsync(stream, baseObject.Data).ConfigureAwait(false);
         return new(baseObject.Type, id, data);
     }
 
@@ -114,14 +114,14 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
     private static async Task<UnlinkedEntry> ReconstructRefDeltaAsync(Stream stream, Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider)
     {
         var hash = new byte[20];
-        var length = await stream.ReadAsync(hash);
+        var length = await stream.ReadAsync(hash).ConfigureAwait(false);
         if (length != hash.Length)
         {
             throw new EndOfStreamException("Unexpected end of stream while reading ref delta hash.");
         }
-        var baseObject = await dependentEntryProvider(hash);
+        var baseObject = await dependentEntryProvider(hash).ConfigureAwait(false);
 
-        var data = await ReconstructDeltaAsync(stream, baseObject.Data);
+        var data = await ReconstructDeltaAsync(stream, baseObject.Data).ConfigureAwait(false);
         return new(baseObject.Type, hash, data);
     }
 
@@ -142,12 +142,12 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
             // Check if it's a copy instruction (1xxxxxxx)
             if ((instruction & 0x80) != 0)
             {
-                await ReadCopyInstructionAsync(decompressed, instruction, baseObject, result);
+                await ReadCopyInstructionAsync(decompressed, instruction, baseObject, result).ConfigureAwait(false);
             }
             else if (instruction != 0)
             {
                 // It's an add new data instruction (0xxxxxxx)
-                await ReadAddNewDataInstructionAsync(decompressed, instruction, result);
+                await ReadAddNewDataInstructionAsync(decompressed, instruction, result).ConfigureAwait(false);
             }
             else
             {
@@ -156,53 +156,54 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
             }
         }
         result.Position = 0;
-        return await result.ToArrayAsync(result.Length);
+        return await result.ToArrayAsync(result.Length).ConfigureAwait(false);
     }
 
     private static async Task ReadCopyInstructionAsync(Stream stream, int instruction, byte[] baseObject, Stream result)
     {
         var offset = ReadCopyInstructionOffset(stream, instruction);
         var size = GetCopyInstructionLength(stream, instruction);
-        await result.WriteAsync(baseObject.AsMemory((int)offset, size));
-    }
-
-    private static long ReadCopyInstructionOffset(Stream stream, int instruction)
-    {
-        var result = 0L;
-        for (var i = 0; i < 4; i++)
-        {
-            if ((instruction & 1 << i) != 0)
-            {
-                var byteValue = stream.ReadNonEosByteOrThrow();
-                result |= (long)byteValue << i * 8;
-            }
-        }
-
-        return result;
-    }
-
-    private static int GetCopyInstructionLength(Stream stream, int instruction)
-    {
-        var result = 0;
-        for (var i = 4; i < 7; i++)
-        {
-            if ((instruction & 1 << i) != 0)
-            {
-                var byteValue = stream.ReadNonEosByteOrThrow() & 0xFF;
-                result |= byteValue << (i - 4) * 8;
-            }
-        }
-
-        // Handle size zero case
-        if (result == 0) result = 0x10000;
-
-        return result;
+        await result.WriteAsync(baseObject.AsMemory((int)offset, size)).ConfigureAwait(false);
     }
 
     private static async Task ReadAddNewDataInstructionAsync(Stream stream, int instruction, PooledMemoryStream result)
     {
         var size = instruction & 0x7F;
-        await result.WriteAsync(stream, size);
+        await result.WriteAsync(stream, size).ConfigureAwait(false);
+    }
+
+    private static long ReadCopyInstructionOffset(Stream stream, int instruction)
+    {
+        long offset = 0;
+        int shift = 0;
+        if ((instruction & 0x01) != 0)
+            offset |= (long)stream.ReadNonEosByteOrThrow() << shift;
+        shift += 8;
+        if ((instruction & 0x02) != 0)
+            offset |= (long)stream.ReadNonEosByteOrThrow() << shift;
+        shift += 8;
+        if ((instruction & 0x04) != 0)
+            offset |= (long)stream.ReadNonEosByteOrThrow() << shift;
+        shift += 8;
+        if ((instruction & 0x08) != 0)
+            offset |= (long)stream.ReadNonEosByteOrThrow() << shift;
+        return offset;
+    }
+
+    private static int GetCopyInstructionLength(Stream stream, int instruction)
+    {
+        int size = 0;
+        int shift = 0;
+        if ((instruction & 0x10) != 0)
+            size |= stream.ReadNonEosByteOrThrow() << shift;
+        shift += 8;
+        if ((instruction & 0x20) != 0)
+            size |= stream.ReadNonEosByteOrThrow() << shift;
+        shift += 8;
+        if ((instruction & 0x40) != 0)
+            size |= stream.ReadNonEosByteOrThrow() << shift;
+        if (size == 0) size = 0x10000;
+        return size;
     }
 
     internal static long ExtractOffset(Stream stream)
@@ -226,17 +227,17 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
     {
         ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(PackReader));
 
-        return (await EnsureIndex()).Count;
+        return (await EnsureIndex().ConfigureAwait(false)).Count;
     }
 
     internal async IAsyncEnumerable<(int Position, HashId Id)> GetHashesAsync()
     {
         ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(PackReader));
 
-        var index = await EnsureIndex();
+        var index = await EnsureIndex().ConfigureAwait(false);
         for (int i = 0; i < index.Count; i++)
         {
-            yield return (i, await index.GetHashAsync(i));
+            yield return (i, await index.GetHashAsync(i).ConfigureAwait(false));
         }
     }
 
@@ -244,11 +245,11 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
     {
         ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(PackReader));
 
-        var index = await EnsureIndex();
-        await foreach (var (position, hash) in GetHashesAsync())
+        var index = await EnsureIndex().ConfigureAwait(false);
+        await foreach (var (position, hash) in GetHashesAsync().ConfigureAwait(false))
         {
-            var offset = await index.GetPackFileOffsetAsync(position);
-            yield return await GetAsync(hash, offset, dependentEntryProvider);
+            var offset = await index.GetPackFileOffsetAsync(position).ConfigureAwait(false);
+            yield return await GetAsync(hash, offset, dependentEntryProvider).ConfigureAwait(false);
         }
     }
 

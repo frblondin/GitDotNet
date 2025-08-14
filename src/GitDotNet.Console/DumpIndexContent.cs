@@ -10,9 +10,9 @@ public class DumpIndexContent(GitConnectionProvider factory) : BackgroundService
     {
         var path = InputData(RepositoryPathInput, Directory.Exists);
         using var connection = factory.Invoke(path);
-        var entries = await connection.Index.GetEntriesAsync();
+        var entries = await connection.Index.GetEntriesAsync().ConfigureAwait(false);
         Print(entries);
-        await StopAsync(stoppingToken);
+        await StopAsync(stoppingToken).ConfigureAwait(false);
     }
 
     private static void Print(IEnumerable<IndexEntry> entries)

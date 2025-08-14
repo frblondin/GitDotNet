@@ -40,20 +40,20 @@ public partial class GitIndexing : IDisposable
     public async IAsyncEnumerable<(string Path, BlobEntry Blob)> SearchAsync<TIndex>(CommitEntry commit, Expression<Func<TIndex, bool>> predicate)
         where TIndex : BlobIndex
     {
-        var commitData = await EnsureIndexAsync(commit);
+        var commitData = await EnsureIndexAsync(commit).ConfigureAwait(false);
         var blobIds = commitData.Blobs.Values.ToList();
         var filteredBlobs = await _context.Set<TIndex>().AsQueryable()
             .Where(x => blobIds.Contains(x.Id))
             .Where(predicate)
             .Select(data => data.Id)
-            .ToListAsync();
+            .ToListAsync().ConfigureAwait(false);
         var blobPaths = commitData.Blobs.ToLookup(x => x.Value, x => x.Key);
         foreach (var id in filteredBlobs)
         {
             var paths = blobPaths[id];
             foreach (var path in paths)
             {
-                yield return (path, await _connection.Objects.GetAsync<BlobEntry>(id));
+                yield return (path, await _connection.Objects.GetAsync<BlobEntry>(id).ConfigureAwait(false));
             }
         }
     }
@@ -65,9 +65,9 @@ public partial class GitIndexing : IDisposable
         {
             return result;
         }
-        var tree = await commit.GetRootTreeAsync();
+        var tree = await commit.GetRootTreeAsync().ConfigureAwait(false);
         result = new CommitContent { Id = commit.Id, Blobs = [] };
-        var collectionValues = await GetBlobIndexValuesAsync(tree, result);
+        var collectionValues = await GetBlobIndexValuesAsync(tree, result).ConfigureAwait(false);
         foreach (var (type, values) in collectionValues)
         {
             await (Task)typeof(GitIndexing).GetMethod(nameof(AddRange), BindingFlags.NonPublic | BindingFlags.Instance)!
@@ -75,8 +75,8 @@ public partial class GitIndexing : IDisposable
                 .Invoke(this, [values])!;
         }
         _context.IndexedBlobs.UpsertRange(result.Blobs.Select(x => new IndexedBlob { Id = x.Value }));
-        await _context.Commits.Upsert(result).NoUpdate().RunAsync();
-        await _context.SaveChangesAsync();
+        await _context.Commits.Upsert(result).NoUpdate().RunAsync().ConfigureAwait(false);
+        await _context.SaveChangesAsync().ConfigureAwait(false);
         return result;
     }
 
@@ -84,14 +84,14 @@ public partial class GitIndexing : IDisposable
         _context.Commits.Find(commit.Id);
 
     private async Task AddRange<TSet>(IEnumerable<BlobIndex> values) where TSet : class =>
-        await _context.Set<TSet>().UpsertRange(values.Cast<TSet>()).NoUpdate().RunAsync();
+        await _context.Set<TSet>().UpsertRange(values.Cast<TSet>()).NoUpdate().RunAsync().ConfigureAwait(false);
 
     private async Task<Dictionary<Type, IList<BlobIndex>>> GetBlobIndexValuesAsync(TreeEntry tree, CommitContent commitBlobs)
     {
         var collectionValues = new Dictionary<Type, IList<BlobIndex>>();
-        var blobs = await GetBlobEntriesAsync(tree).ToListAsync();
+        var blobs = await GetBlobEntriesAsync(tree).ToListAsync().ConfigureAwait(false);
         var blobIds = blobs.Select(x => x.Blob.Id).ToHashSet();
-        var existingIndexes = await _context.IndexedBlobs.Where(x => blobIds.Contains(x.Id)).Select(x => x.Id).ToHashSetAsync();
+        var existingIndexes = await _context.IndexedBlobs.Where(x => blobIds.Contains(x.Id)).Select(x => x.Id).ToHashSetAsync().ConfigureAwait(false);
         foreach (var (blobTreeEntry, path) in blobs)
         {
             commitBlobs.Blobs[path] = blobTreeEntry.Id;
@@ -147,7 +147,7 @@ public partial class GitIndexing : IDisposable
                 }
                 else if (child.Mode.EntryType == EntryType.Tree)
                 {
-                    var treeEntry = await child.GetEntryAsync<TreeEntry>();
+                    var treeEntry = await child.GetEntryAsync<TreeEntry>().ConfigureAwait(false);
                     stack.Push((treeEntry, childPath));
                 }
             }

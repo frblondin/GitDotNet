@@ -33,12 +33,14 @@ public class LogEntry(HashId commitId, HashId treeId, IList<HashId> parentIds, D
 
     /// <summary>Asynchronously retrieves the <see cref="CommitEntry"/> associated with this log entry.</summary>
     /// <returns>The task result contains the <see cref="CommitEntry"/> associated with this log entry.</returns>
-    public async Task<CommitEntry> GetCommitAsync() => _commit ??= await _objectResolver.GetAsync<CommitEntry>(CommitId);
+    public async Task<CommitEntry> GetCommitAsync() =>
+        _commit ??= await _objectResolver.GetAsync<CommitEntry>(CommitId).ConfigureAwait(false);
 
     /// <summary>Asynchronously retrieves the <see cref="TreeEntry"/> associated with this log entry.</summary>
     /// <returns>The task result contains the <see cref="TreeEntry"/> associated with this log entry.</returns>
     [ExcludeFromCodeCoverage]
-    public async Task<TreeEntry> GetRootTreeAsync() => _tree ??= await _objectResolver.GetAsync<TreeEntry>(TreeId);
+    public async Task<TreeEntry> GetRootTreeAsync() =>
+        _tree ??= await _objectResolver.GetAsync<TreeEntry>(TreeId).ConfigureAwait(false);
 
     /// <summary>Asynchronously retrieves the parent commits of this log entry.</summary>
     /// <returns>The task result contains the parent commits associated with this log entry.</returns>
@@ -47,7 +49,7 @@ public class LogEntry(HashId commitId, HashId treeId, IList<HashId> parentIds, D
         if (_parents is null)
         {
             var tasks = ParentIds.Select(_objectResolver.GetAsync<LogEntry>);
-            _parents = ImmutableList.Create(await Task.WhenAll(tasks));
+            _parents = ImmutableList.Create(await Task.WhenAll(tasks).ConfigureAwait(false));
         }
         return _parents;
     }

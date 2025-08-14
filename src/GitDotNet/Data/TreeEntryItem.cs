@@ -32,7 +32,7 @@ public sealed class TreeEntryItem : IEquatable<TreeEntryItem>
     /// <summary>Asynchronously gets the entry associated with the tree entry item.</summary>
     /// <returns>The entry associated with the tree entry item.</returns>
     public async Task<TEntry> GetEntryAsync<TEntry>() where TEntry : Entry =>
-        (_entry ??= await _entryProvider(Id)) as TEntry ??
+        (_entry ??= await _entryProvider(Id).ConfigureAwait(false)) as TEntry ??
         throw new InvalidOperationException($"Expected a {typeof(TEntry).Name} entry.");
 
     /// <summary>Gets the item with the specified relative path.</summary>
@@ -45,7 +45,7 @@ public sealed class TreeEntryItem : IEquatable<TreeEntryItem>
 
         while (true)
         {
-            var tree = await currentItem.GetEntryAsync<TreeEntry>();
+            var tree = await currentItem.GetEntryAsync<TreeEntry>().ConfigureAwait(false);
             currentItem = tree.Children.FirstOrDefault(
                 x => x.Name.Equals(currentPath.Root, StringComparison.Ordinal));
 
@@ -61,7 +61,7 @@ public sealed class TreeEntryItem : IEquatable<TreeEntryItem>
     /// <returns>The relative path to the entry, or <see langword="null"/> if the entry was not found.</returns>
     public async Task<GitPath?> TryGetRelativePathToAsync(Entry entry)
     {
-        return await TryGetRelativePathToAsync(entry, new Stack<string>([Name]));
+        return await TryGetRelativePathToAsync(entry, new Stack<string>([Name])).ConfigureAwait(false);
     }
 
     private async Task<GitPath?> TryGetRelativePathToAsync(Entry entry, Stack<string> path)
@@ -70,11 +70,11 @@ public sealed class TreeEntryItem : IEquatable<TreeEntryItem>
 
         if (Mode.EntryType == EntryType.Tree)
         {
-            var item = await GetEntryAsync<TreeEntry>();
+            var item = await GetEntryAsync<TreeEntry>().ConfigureAwait(false);
             foreach (var child in item.Children)
             {
                 path.Push(child.Name);
-                var result = await child.TryGetRelativePathToAsync(entry, path);
+                var result = await child.TryGetRelativePathToAsync(entry, path).ConfigureAwait(false);
                 if (result != null)
                     return result;
                 path.Pop();
@@ -123,11 +123,11 @@ public sealed class TreeEntryItem : IEquatable<TreeEntryItem>
             {
                 // Synchronous delegate invocation
                 var result = func((new GitPath(currentPath.ToArray()), current));
-                await channel.Writer.WriteAsync(result);
+                await channel.Writer.WriteAsync(result, cancellationToken).ConfigureAwait(false);
             }
             else if (current.Mode.EntryType == EntryType.Tree)
             {
-                var tree = await current.GetEntryAsync<TreeEntry>();
+                var tree = await current.GetEntryAsync<TreeEntry>().ConfigureAwait(false);
                 foreach (var child in tree.Children)
                 {
                     var newPath = new List<string>(currentPath) { child.Name };
