@@ -84,39 +84,55 @@ public sealed class TreeEntryItem : IEquatable<TreeEntryItem>
         return null;
     }
 
-    internal async Task GetAllBlobEntriesAsync(List<(GitPath Path, TreeEntryItem BlobEntry)> result, Stack<string> path)
+    internal async Task GetAllBlobEntriesAsync(List<(GitPath Path, TreeEntryItem BlobEntry)> result, List<string> path, CancellationToken cancellationToken = default)
     {
-        if (Mode.EntryType == EntryType.Blob) result.Add((path.Reverse().ToArray(), this));
-
-        if (Mode.EntryType == EntryType.Tree)
+        var stack = new Stack<(TreeEntryItem item, List<string> path)>();
+        stack.Push((this, new List<string>(path)));
+        while (stack.Count > 0)
         {
-            var item = await GetEntryAsync<TreeEntry>();
-            foreach (var child in item.Children)
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var (current, currentPath) = stack.Pop();
+            if (current.Mode.EntryType == EntryType.Blob)
             {
-                path.Push(child.Name);
-                await child.GetAllBlobEntriesAsync(result, path);
-                path.Pop();
+                result.Add((new GitPath(currentPath.ToArray()), current));
+            }
+            else if (current.Mode.EntryType == EntryType.Tree)
+            {
+                var tree = await current.GetEntryAsync<TreeEntry>();
+                foreach (var child in tree.Children)
+                {
+                    var newPath = new List<string>(currentPath) { child.Name };
+                    stack.Push((child, newPath));
+                }
             }
         }
     }
 
     [ExcludeFromCodeCoverage]
-    internal async Task GetAllBlobEntriesAsync<TResult>(Channel<TResult> channel, Func<(GitPath Path, TreeEntryItem BlobEntry), TResult> func, Stack<string> path)
+    internal async Task GetAllBlobEntriesAsync<TResult>(Channel<TResult> channel, Func<(GitPath Path, TreeEntryItem BlobEntry), TResult> func, List<string> path, CancellationToken cancellationToken = default)
     {
-        if (Mode.EntryType == EntryType.Blob)
+        var stack = new Stack<(TreeEntryItem item, List<string> path)>();
+        stack.Push((this, new List<string>(path)));
+        while (stack.Count > 0)
         {
-            var result = func((path.Reverse().ToArray(), this));
-            await channel.Writer.WriteAsync(result);
-        }
+            cancellationToken.ThrowIfCancellationRequested();
 
-        if (Mode.EntryType == EntryType.Tree)
-        {
-            var item = await GetEntryAsync<TreeEntry>();
-            foreach (var child in item.Children)
+            var (current, currentPath) = stack.Pop();
+            if (current.Mode.EntryType == EntryType.Blob)
             {
-                path.Push(child.Name);
-                await child.GetAllBlobEntriesAsync(channel, func, path);
-                path.Pop();
+                // Synchronous delegate invocation
+                var result = func((new GitPath(currentPath.ToArray()), current));
+                await channel.Writer.WriteAsync(result);
+            }
+            else if (current.Mode.EntryType == EntryType.Tree)
+            {
+                var tree = await current.GetEntryAsync<TreeEntry>();
+                foreach (var child in tree.Children)
+                {
+                    var newPath = new List<string>(currentPath) { child.Name };
+                    stack.Push((child, newPath));
+                }
             }
         }
     }

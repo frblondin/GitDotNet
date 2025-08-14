@@ -46,11 +46,13 @@ public class TreeEntry : Entry
     }
 
     /// <summary>Gets all blob entries in the tree.</summary>
+    /// <param name="basePath">This optional parameter specifies the base path for the blob entries being retrieved.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An enumerable of all blob entries in the tree.</returns>
-    public async IAsyncEnumerable<(GitPath Path, TreeEntryItem BlobEntry)> GetAllBlobEntriesAsync(GitPath? basePath = null)
+    public async IAsyncEnumerable<(GitPath Path, TreeEntryItem BlobEntry)> GetAllBlobEntriesAsync(GitPath? basePath = null, CancellationToken cancellationToken = default)
     {
         var channel = Channel.CreateUnbounded<(GitPath Path, TreeEntryItem Stream)>();
-        var task = GetAllBlobEntriesAsync(channel, x => x, basePath);
+        var task = GetAllBlobEntriesAsync(channel, x => x, basePath, cancellationToken);
         await foreach (var result in channel.Reader.ReadAllAsync())
         {
             yield return result;
@@ -62,16 +64,17 @@ public class TreeEntry : Entry
     /// <param name="channel">The channel to write the results to.</param>
     /// <param name="func">The function to apply to each blob entry.</param>
     /// <param name="basePath">This optional parameter specifies the base path for the blob entries being retrieved.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An enumerable of all blob entries in the tree.</returns>
     [ExcludeFromCodeCoverage]
-    public async Task GetAllBlobEntriesAsync<TResult>(Channel<TResult> channel, Func<(GitPath Path, TreeEntryItem BlobEntry), TResult> func, GitPath? basePath = null)
+    public async Task GetAllBlobEntriesAsync<TResult>(Channel<TResult> channel, Func<(GitPath Path, TreeEntryItem BlobEntry), TResult> func, GitPath? basePath = null, CancellationToken cancellationToken = default)
     {
-        var stack = new Stack<string>(basePath ?? []);
+        var path = new List<string>(basePath ?? []);
         foreach (var child in Children)
         {
-            stack.Push(child.Name);
-            await child.GetAllBlobEntriesAsync(channel, func, stack);
-            stack.Pop();
+            path.Add(child.Name);
+            await child.GetAllBlobEntriesAsync(channel, func, path, cancellationToken);
+            path.RemoveAt(path.Count - 1);
         }
         channel.Writer.Complete();
     }

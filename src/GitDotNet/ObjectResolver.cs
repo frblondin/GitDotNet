@@ -64,7 +64,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         var result = default(UnlinkedEntry?);
         for (int i = 0; i < attempts; i++)
         {
-            result = await TryReadUnlinkedEntryAsync(id, throwIfNotFound && i == attempts - 1);
+            result = await ReadUnlinkedEntryAsync(id, throwIfNotFound && i == attempts - 1);
             if (result is null && i < attempts - 1)
             {
                 // Protect against filesystem changes not being immediately visible
@@ -80,7 +80,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         return result is null || result.Id.Hash.Count > 0 ? result : result with { Id = id };
     }
 
-    private async Task<UnlinkedEntry?> TryReadUnlinkedEntryAsync(HashId id, bool throwIfNotFound)
+    private async Task<UnlinkedEntry?> ReadUnlinkedEntryAsync(HashId id, bool throwIfNotFound)
     {
         ObjectDisposedException.ThrowIf(_disposedValue, this);
 

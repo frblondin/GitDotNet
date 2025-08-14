@@ -1,4 +1,4 @@
-using System.IO.Compression;
+using System.Diagnostics;
 using System.Threading.Channels;
 using Microsoft.Extensions.Hosting;
 using static System.Console;
@@ -13,24 +13,22 @@ public class DumpCommitContent(GitConnectionProvider factory) : BackgroundServic
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var path = InputData(RepositoryPathInput, Directory.Exists);
+        var showRecords = InputData("Show records - slow? (y/n)",
+            x => x.Equals("y", StringComparison.OrdinalIgnoreCase) || x.Equals("n", StringComparison.OrdinalIgnoreCase),
+            "n").Equals("y", StringComparison.OrdinalIgnoreCase);
         using var connection = factory.Invoke(path);
         var tip = await connection.Head.GetTipAsync();
         var root = await tip.GetRootTreeAsync();
+        var stopwatch = Stopwatch.StartNew();
         var channel = Channel.CreateUnbounded<Task<(GitPath Path, long Length)>>();
         await root.GetAllBlobEntriesAsync(channel, async data =>
         {
             var gitEntry = await data.BlobEntry.GetEntryAsync<BlobEntry>();
             using var stream = gitEntry.OpenRead();
+            if (showRecords) WriteLine($"{data.Path}: {stream.Length} bytes");
             return (data.Path, stream.Length);
-        });
-        while (await channel.Reader.WaitToReadAsync(stoppingToken))
-        {
-            while (channel.Reader.TryRead(out var dataTask))
-            {
-                var data = await dataTask;
-                WriteLine($"{data.Path}: {data.Length} bytes");
-            }
-        }
+        }, cancellationToken: stoppingToken);
+        WriteLine("Completed reading repository in {0} ms", stopwatch.ElapsedMilliseconds);
         await StopAsync(stoppingToken);
     }
 }
