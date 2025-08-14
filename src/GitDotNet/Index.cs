@@ -26,7 +26,8 @@ public class Index
 
     /// <summary>Gets the entries from the index file asynchronously.</summary>
     /// <returns>A task that represents the asynchronous operation. The task result contains a list of <see cref="IndexEntry"/> instances.</returns>
-    public async Task<IImmutableList<IndexEntry>> GetEntriesAsync() => await _indexReader.GetEntriesAsync();
+    public async Task<IImmutableList<IndexEntry>> GetEntriesAsync() =>
+        await _indexReader.GetEntriesAsync().ConfigureAwait(false);
 
     /// <summary>Adds a new entry to the Git index using a byte array as content.</summary>
     /// <param name="data">The byte array containing the data to be added to the Git index.</param>

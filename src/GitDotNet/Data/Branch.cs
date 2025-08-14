@@ -55,7 +55,7 @@ public class Branch : IAsyncEnumerable<LogEntry>, IComparable<Branch>, IEquatabl
     }
 
     /// <summary>Gets the tip commit of the branch.</summary>
-    public async Task<CommitEntry> GetTipAsync() => await Connection.Objects.GetAsync<CommitEntry>(_tipProvider());
+    public async Task<CommitEntry> GetTipAsync() => await Connection.Objects.GetAsync<CommitEntry>(_tipProvider()).ConfigureAwait(false);
 
     /// <summary>
     /// Updates a reference in the Git repository to point to a new commit. This operation modifies the reference to the
@@ -179,7 +179,7 @@ public class Branch : IAsyncEnumerable<LogEntry>, IComparable<Branch>, IEquatabl
         }
 
         /// <summary>
-        /// Removes a specified branch from the repository. The removal can be forced or done safely depending on the
+        /// Removes a specified branch from the repository. The removal can be force or done safely depending on the
         /// provided option.
         /// </summary>
         /// <param name="name">Specifies the branch to be removed from the repository.</param>

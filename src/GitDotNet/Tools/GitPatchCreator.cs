@@ -31,13 +31,13 @@ public partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnifie
             NewLine = "\n"
         };
 
-        await GetHeaderAsync(writer, start, end);
+        await GetHeaderAsync(writer, start, end).ConfigureAwait(false);
         GetDiffStat(writer, changes);
 
         var indexLine = $"index {start?.Id.ToString()[..7] ?? "null"}..{end.Id.ToString()[..7]}";
         foreach (var change in changes)
         {
-            await CreatePatchAsync(writer, change, indexLine);
+            await CreatePatchAsync(writer, change, indexLine).ConfigureAwait(false);
         }
     }
 
@@ -46,12 +46,12 @@ public partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnifie
         var author = end.Author ?? throw new InvalidOperationException("Author is required.");
         if (start != null)
         {
-            await writer.WriteLineAsync($"From {start.Id} {author.Timestamp:ddd MMM dd HH:mm:ss yyyy}");
+            await writer.WriteLineAsync($"From {start.Id} {author.Timestamp:ddd MMM dd HH:mm:ss yyyy}").ConfigureAwait(false);
         }
-        await writer.WriteLineAsync($"From: {author.Name} <{author.Email}>");
-        await writer.WriteLineAsync($"Date: {author.Timestamp:ddd, dd MMM yyyy HH:mm:ss +0000}");
-        await writer.WriteLineAsync($"Subject: [PATCH] {end.Message}");
-        await writer.WriteLineAsync();
+        await writer.WriteLineAsync($"From: {author.Name} <{author.Email}>").ConfigureAwait(false);
+        await writer.WriteLineAsync($"Date: {author.Timestamp:ddd, dd MMM yyyy HH:mm:ss +0000}").ConfigureAwait(false);
+        await writer.WriteLineAsync($"Subject: [PATCH] {end.Message}").ConfigureAwait(false);
+        await writer.WriteLineAsync().ConfigureAwait(false);
     }
 
     internal static void GetDiffStat(StreamWriter writer, IList<Change> changes)
@@ -101,13 +101,13 @@ public partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnifie
 
     private async Task CreatePatchAsync(StreamWriter writer, Change change, string indexLine)
     {
-        await WritePathAsync(writer, "--- a/", change.OldPath);
-        await WritePathAsync(writer, "+++ b/", change.NewPath);
-        await writer.WriteLineAsync($"{indexLine} {change.New?.Mode ?? change.Old?.Mode}");
+        await WritePathAsync(writer, "--- a/", change.OldPath).ConfigureAwait(false);
+        await WritePathAsync(writer, "+++ b/", change.NewPath).ConfigureAwait(false);
+        await writer.WriteLineAsync($"{indexLine} {change.New?.Mode ?? change.Old?.Mode}").ConfigureAwait(false);
 
         // Hunks
-        var oldBlob = change.Old is not null ? await change.Old.GetEntryAsync<BlobEntry>() : null;
-        var newBlob = change.New is not null ? await change.New.GetEntryAsync<BlobEntry>() : null;
+        var oldBlob = change.Old is not null ? await change.Old.GetEntryAsync<BlobEntry>().ConfigureAwait(false) : null;
+        var newBlob = change.New is not null ? await change.New.GetEntryAsync<BlobEntry>().ConfigureAwait(false) : null;
         if ((oldBlob?.IsText ?? true) && (newBlob?.IsText ?? true))
         {
             var hunks = GetHunks(oldBlob?.OpenRead(), newBlob?.OpenRead());
@@ -118,7 +118,7 @@ public partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnifie
         }
         else
         {
-            await writer.WriteLineAsync("Binary files differ");
+            await writer.WriteLineAsync("Binary files differ").ConfigureAwait(false);
         }
     }
 
@@ -133,15 +133,15 @@ public partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnifie
 
     private static async Task WritePathAsync(StreamWriter writer, string prefix, GitPath? path)
     {
-        await writer.WriteAsync(prefix);
+        await writer.WriteAsync(prefix).ConfigureAwait(false);
         if (path is null)
         {
-            await writer.WriteLineAsync("dev/null");
+            await writer.WriteLineAsync("dev/null").ConfigureAwait(false);
         }
         else
         {
             path.AppendTo(writer);
-            await writer.WriteLineAsync();
+            await writer.WriteLineAsync().ConfigureAwait(false);
         }
     }
 

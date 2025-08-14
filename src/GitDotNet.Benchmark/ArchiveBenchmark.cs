@@ -29,7 +29,7 @@ public class ArchiveBenchmark
         var connection = ReadRandomBlobsBenchmark
             .CreateConnectionProvider(o => o.SlidingCacheExpiration = TimeSpan.FromSeconds(1))
             .Invoke(ReadRandomBlobsBenchmark.Path)!;
-        await Archive(connection);
+        await Archive(connection).ConfigureAwait(false);
     }
 
     private static async Task Archive(GitConnection connection)
@@ -41,8 +41,8 @@ public class ArchiveBenchmark
             using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: false))
             {
                 var channel = Channel.CreateUnbounded<Task<(GitPath Path, Stream Stream)>>();
-                await ReadRepository(connection, channel);
-                await WriteArchive(archive, channel);
+                await ReadRepository(connection, channel).ConfigureAwait(false);
+                await WriteArchive(archive, channel).ConfigureAwait(false);
             }
 
             Console.WriteLine($"Zip file created at: {zipPath} of size {new FileInfo(zipPath).Length}");
@@ -55,26 +55,26 @@ public class ArchiveBenchmark
 
     private static async Task ReadRepository(GitConnection connection, Channel<Task<(GitPath Path, Stream Stream)>> channel)
     {
-        var tip = await connection.Head.GetTipAsync();
-        var root = await tip.GetRootTreeAsync();
+        var tip = await connection.Head.GetTipAsync().ConfigureAwait(false);
+        var root = await tip.GetRootTreeAsync().ConfigureAwait(false);
         await root.GetAllBlobEntriesAsync(channel, async data =>
         {
-            var gitEntry = await data.BlobEntry.GetEntryAsync<BlobEntry>();
+            var gitEntry = await data.BlobEntry.GetEntryAsync<BlobEntry>().ConfigureAwait(false);
             return (data.Path, gitEntry.OpenRead());
-        });
+        }).ConfigureAwait(false);
     }
 
     private static async Task WriteArchive(ZipArchive archive, Channel<Task<(GitPath Path, Stream Stream)>> channel)
     {
-        while (await channel.Reader.WaitToReadAsync())
+        while (await channel.Reader.WaitToReadAsync().ConfigureAwait(false))
         {
             while (channel.Reader.TryRead(out var dataTask))
             {
-                var data = await dataTask;
+                var data = await dataTask.ConfigureAwait(false);
                 var entry = archive.CreateEntry(data.Path.ToString(), CompressionLevel.Fastest);
                 using var entryStream = entry.Open();
-                await data.Stream.CopyToAsync(entryStream);
-                await data.Stream.DisposeAsync();
+                await data.Stream.CopyToAsync(entryStream).ConfigureAwait(false);
+                await data.Stream.DisposeAsync().ConfigureAwait(false);
             }
         }
     }

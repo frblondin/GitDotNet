@@ -54,21 +54,21 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         var fourByteBuffer = ArrayPool<byte>.Shared.Rent(4);
         try
         {
-            await stream.ReadExactlyAsync(fourByteBuffer.AsMemory(0, 4));
-            var version = await ReadVersion(stream, fourByteBuffer);
+            await stream.ReadExactlyAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
+            var version = await ReadVersion(stream, fourByteBuffer).ConfigureAwait(false);
             var fanout = new int[FanOutTableSize];
             for (var i = 0; i < FanOutTableSize; i++)
             {
-                await stream.ReadExactlyAsync(fourByteBuffer.AsMemory(0, 4));
+                await stream.ReadExactlyAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
                 fanout[i] = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
             }
 
             // Read last 20-byte of stream to get the last hash
             stream.Seek(-2 * ObjectResolver.HashLength, SeekOrigin.End);
             var packChecksum = new byte[ObjectResolver.HashLength];
-            await stream.ReadExactlyAsync(packChecksum);
+            await stream.ReadExactlyAsync(packChecksum).ConfigureAwait(false);
             var checksum = new byte[ObjectResolver.HashLength];
-            await stream.ReadExactlyAsync(packChecksum);
+            await stream.ReadExactlyAsync(packChecksum).ConfigureAwait(false);
 
             return new PackIndexReader(path, version, fanout, packChecksum, checksum, fileSystem);
         }
@@ -83,10 +83,10 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
     {
         for (int i = 0; i < Count; i++)
         {
-            var packFileOffset = await GetPackFileOffsetAsync(i);
+            var packFileOffset = await GetPackFileOffsetAsync(i).ConfigureAwait(false);
             if (packFileOffset == offset)
             {
-                return await GetHashAsync(i);
+                return await GetHashAsync(i).ConfigureAwait(false);
             }
         }
         throw new NotSupportedException($"Couldn't find the corresponding hash for offset {offset} in pack index {path}.");
@@ -97,7 +97,7 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         using var stream = new MemoryStream(_data, writable: false);
         stream.Seek(SortedObjectNamesOffset + index * 20, SeekOrigin.Begin);
         var hash = new byte[ObjectResolver.HashLength];
-        await stream.ReadExactlyAsync(hash.AsMemory(0, ObjectResolver.HashLength));
+        await stream.ReadExactlyAsync(hash.AsMemory(0, ObjectResolver.HashLength)).ConfigureAwait(false);
         return hash;
     }
 
@@ -111,10 +111,10 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
 
         stream.Seek(SortedObjectNamesOffset + start * 20, SeekOrigin.Begin);
 
-        (end, start, var result) = await FindHashIndexAsync(id, stream, hashBuffer, end, start);
+        (end, start, var result) = await FindHashIndexAsync(id, stream, hashBuffer, end, start).ConfigureAwait(false);
         if (result != -1 && id.Hash.Count < ObjectResolver.HashLength)
         {
-            await CheckForAmbiguousHash(start, end, result, hashBuffer);
+            await CheckForAmbiguousHash(start, end, result, hashBuffer).ConfigureAwait(false);
         }
         return result;
 
@@ -123,7 +123,7 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
             stream.Seek(SortedObjectNamesOffset + start * 20, SeekOrigin.Begin);
             for (var i = start; i < end; i++)
             {
-                await stream.ReadExactlyAsync(hashBuffer);
+                await stream.ReadExactlyAsync(hashBuffer).ConfigureAwait(false);
                 CheckForHashCollision(id, alreadyFound, hashBuffer, i);
             }
         }
@@ -136,7 +136,7 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         {
             var mid = (start + end) / 2;
             stream.Seek(SortedObjectNamesOffset + mid * 20, SeekOrigin.Begin);
-            await stream.ReadExactlyAsync(hashBuffer.AsMemory(0, ObjectResolver.HashLength));
+            await stream.ReadExactlyAsync(hashBuffer.AsMemory(0, ObjectResolver.HashLength)).ConfigureAwait(false);
 
             var comparison = id.CompareTo(hashBuffer.AsSpan(0, id.Hash.Count));
             if (comparison == 0)
@@ -174,9 +174,9 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         try
         {
             stream.Seek(PackFilePositionOffset + index * 4, SeekOrigin.Begin);
-            await stream.ReadExactlyAsync(offset.AsMemory(0, 4));
+            await stream.ReadExactlyAsync(offset.AsMemory(0, 4)).ConfigureAwait(false);
             var result = (long)BinaryPrimitives.ReadInt32BigEndian(offset.AsSpan(0, 4));
-            result = await CalculateLargePackFileOffset(index, stream, offset, result);
+            result = await CalculateLargePackFileOffset(index, stream, offset, result).ConfigureAwait(false);
             return result;
         }
         finally
@@ -192,7 +192,7 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         if (result > 0x80000000)
         {
             stream.Seek(LargePackFilePositionOffset + index * 8, SeekOrigin.Begin);
-            await stream.ReadExactlyAsync(offset.AsMemory(0, 8));
+            await stream.ReadExactlyAsync(offset.AsMemory(0, 8)).ConfigureAwait(false);
             result = BinaryPrimitives.ReadInt32BigEndian(offset.AsSpan(0, 4));
         }
 
@@ -205,7 +205,7 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         // Version is set only if bytes equal 255, 116, 79, 99
         if (fourByteBuffer[0] == 255 && fourByteBuffer[1] == 116 && fourByteBuffer[2] == 79 && fourByteBuffer[3] == 99)
         {
-            await stream.ReadExactlyAsync(fourByteBuffer.AsMemory(0, 4));
+            await stream.ReadExactlyAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
             version = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
         }
         else

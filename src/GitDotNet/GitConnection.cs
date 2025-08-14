@@ -87,7 +87,7 @@ public partial class GitConnection : IDisposable
     /// <param name="committish">The committish reference.</param>
     /// <returns>The commit hash as a byte array.</returns>
     public async Task<CommitEntry> GetCommittishAsync(string committish) =>
-        await GetCommittishAsync<CommitEntry>(committish, c => c.ParentIds);
+        await GetCommittishAsync<CommitEntry>(committish, c => c.ParentIds).ConfigureAwait(false);
 
     internal async Task<T> GetCommittishAsync<T>(string committish, Func<T, IList<HashId>> parentProvider)
         where T : Entry
@@ -98,7 +98,7 @@ public partial class GitConnection : IDisposable
         {
             reference = matches[0].Groups["ref"].Value;
             var commitId = GetReferenceTip(reference);
-            var commit = await Objects.GetAsync<T>(commitId);
+            var commit = await Objects.GetAsync<T>(commitId).ConfigureAwait(false);
 
             foreach (Match match in matches)
             {
@@ -108,7 +108,7 @@ public partial class GitConnection : IDisposable
                 var traversed = TraverseCommit(commitId, parentProvider(commit) , op, num);
                 if (traversed != commitId)
                 {
-                    commit = await Objects.GetAsync<T>(traversed);
+                    commit = await Objects.GetAsync<T>(traversed).ConfigureAwait(false);
                 }
             }
             return commit;
@@ -116,7 +116,7 @@ public partial class GitConnection : IDisposable
         else
         {
             var commitId = GetReferenceTip(reference);
-            return await Objects.GetAsync<T>(commitId);
+            return await Objects.GetAsync<T>(commitId).ConfigureAwait(false);
         }
 
         HashId GetReferenceTip(string reference) => reference switch
@@ -150,16 +150,16 @@ public partial class GitConnection : IDisposable
     /// <param name="new">The new <see cref="TreeEntry"/> instance.</param>
     /// <returns>A list of changes between the two <see cref="TreeEntry"/> instances.</returns>
     public virtual async Task<IList<Change>> CompareAsync(TreeEntry? old, TreeEntry @new) =>
-        await _comparer.CompareAsync(old, @new);
+        await _comparer.CompareAsync(old, @new).ConfigureAwait(false);
 
     /// <summary>Compares two <see cref="CommitEntry"/> instances by comparing their associated tree entries.</summary>
     /// <param name="old">The old <see cref="CommitEntry"/> instance.</param>
     /// <param name="new">The new <see cref="CommitEntry"/> instance.</param>
     public virtual async Task<IList<Change>> CompareAsync(CommitEntry? old, CommitEntry @new)
     {
-        var oldTree = old != null ? await old.GetRootTreeAsync() : null;
-        var newTree = await @new.GetRootTreeAsync();
-        return await CompareAsync(oldTree, newTree);
+        var oldTree = old != null ? await old.GetRootTreeAsync().ConfigureAwait(false) : null;
+        var newTree = await @new.GetRootTreeAsync().ConfigureAwait(false);
+        return await CompareAsync(oldTree, newTree).ConfigureAwait(false);
     }
 
     /// <summary>Compares two commit references by comparing their associated commit entries.</summary>
@@ -167,9 +167,9 @@ public partial class GitConnection : IDisposable
     /// <param name="new">The new reference.</param>
     public virtual async Task<IList<Change>> CompareAsync(string? old, string @new)
     {
-        var oldCommit = old != null ? await GetCommittishAsync(old) : null;
-        var newCommit = await GetCommittishAsync(@new);
-        return await CompareAsync(oldCommit, newCommit);
+        var oldCommit = old != null ? await GetCommittishAsync(old).ConfigureAwait(false) : null;
+        var newCommit = await GetCommittishAsync(@new).ConfigureAwait(false);
+        return await CompareAsync(oldCommit, newCommit).ConfigureAwait(false);
     }
 
     /// <summary>Determines whether the specified path is a valid Git repository.</summary>

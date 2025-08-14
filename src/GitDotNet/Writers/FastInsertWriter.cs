@@ -79,13 +79,13 @@ internal sealed class FastInsertWriter : IDisposable
 
     public async Task WriteHeaderAsync(string branch, CommitEntry commit)
     {
-        await _writer.WriteLineAsync($"commit {branch}");
-        await _writer.WriteLineAsync($"mark :1");
-        if (commit.Author is not null) await WriteSignatureAsync("author", commit.Author);
-        if (commit.Committer is not null) await WriteSignatureAsync("committer", commit.Committer);
-        await _writer.WriteLineAsync($"data {Encoding.UTF8.GetByteCount(commit.Message)}");
-        await _writer.WriteLineAsync(commit.Message);
-        await WriteParentCommitsAsync(await commit.GetParentsAsync());
+        await _writer.WriteLineAsync($"commit {branch}").ConfigureAwait(false);
+        await _writer.WriteLineAsync($"mark :1").ConfigureAwait(false);
+        if (commit.Author is not null) await WriteSignatureAsync("author", commit.Author).ConfigureAwait(false);
+        if (commit.Committer is not null) await WriteSignatureAsync("committer", commit.Committer).ConfigureAwait(false);
+        await _writer.WriteLineAsync($"data {Encoding.UTF8.GetByteCount(commit.Message)}").ConfigureAwait(false);
+        await _writer.WriteLineAsync(commit.Message).ConfigureAwait(false);
+        await WriteParentCommitsAsync(await commit.GetParentsAsync().ConfigureAwait(false)).ConfigureAwait(false);
     }
 
     private async Task WriteSignatureAsync(string type, Signature signature) => await _writer.WriteLineAsync(
@@ -93,16 +93,16 @@ internal sealed class FastInsertWriter : IDisposable
         $"{signature.Name} " +
         $"<{signature.Email}> " +
         $"{signature.Timestamp.ToUnixTimeSeconds()} " +
-        $"{signature.Timestamp.Offset.Minutes:+0000;-0000}");
+        $"{signature.Timestamp.Offset.Minutes:+0000;-0000}").ConfigureAwait(false);
 
     private async Task WriteParentCommitsAsync(IList<CommitEntry> parents)
     {
         if (parents.Count >= 1)
         {
-            await _writer.WriteLineAsync($"from {parents[0].Id}");
+            await _writer.WriteLineAsync($"from {parents[0].Id}").ConfigureAwait(false);
             if (parents.Count >= 2)
             {
-                await _writer.WriteLineAsync($"merge {parents[1].Id}");
+                await _writer.WriteLineAsync($"merge {parents[1].Id}").ConfigureAwait(false);
             }
         }
     }

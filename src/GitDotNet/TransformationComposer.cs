@@ -39,7 +39,7 @@ internal class TransformationComposer(string repositoryPath, FastInsertWriterFac
     {
         var updateBranch = options?.UpdateBranch ?? true;
         var importBranch = updateBranch ? CheckFullReferenceName(branch) : $"refs/gitdotnetfastimport/{Guid.NewGuid()}";
-        using var data = await WriteData(importBranch, commit);
+        using var data = await WriteData(importBranch, commit).ConfigureAwait(false);
         data.Seek(0, SeekOrigin.Begin);
         var markFile = GetMarkDownPath(repositoryPath, fileSystem);
         try
@@ -81,7 +81,7 @@ internal class TransformationComposer(string repositoryPath, FastInsertWriterFac
     {
         var result = new PooledMemoryStream();
         using var writer = FastInsertWriterFactory(result);
-        await writer.WriteHeaderAsync(branch, commit);
+        await writer.WriteHeaderAsync(branch, commit).ConfigureAwait(false);
         writer.WriteTransformations(this);
         return result;
     }

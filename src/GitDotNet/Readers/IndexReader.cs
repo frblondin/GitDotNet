@@ -24,13 +24,13 @@ internal class IndexReader(string path, IObjectResolver objectResolver, IFileSys
             var version = ReadVersion(stream, fourByteBuffer);
 
             stream.Seek(8L, SeekOrigin.Begin);
-            await stream.ReadExactlyAsync(fourByteBuffer.AsMemory(0, 4));
+            await stream.ReadExactlyAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
             var entryCount = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
             var result = ImmutableList.CreateBuilder<IndexEntry>();
             for (int i = 0; i < entryCount; i++)
             {
-                var entry = await ReadEntryAsync(stream, objectResolver, version);
+                var entry = await ReadEntryAsync(stream, objectResolver, version).ConfigureAwait(false);
                 result.Add(entry);
             }
             return result.ToImmutable();
@@ -52,40 +52,40 @@ internal class IndexReader(string path, IObjectResolver objectResolver, IFileSys
         var fourByteBuffer = ArrayPool<byte>.Shared.Rent(4);
         try
         {
-            var read = await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
+            var read = await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
             var cTime = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
-            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
+            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
             var cTimeNano = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
-            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
+            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
             var mTime = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
-            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
+            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
             var mTimeNano = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
-            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
+            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
             BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
-            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
+            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
             BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
-            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
+            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
             var mode = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
-            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
+            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
             BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
-            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
+            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
             BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
-            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4));
+            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
             var fileSize = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
 
             var hash = new byte[20];
-            read += await stream.ReadAsync(hash.AsMemory(0, 20));
+            read += await stream.ReadAsync(hash.AsMemory(0, 20)).ConfigureAwait(false);
 
-            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 2));
+            read += await stream.ReadAsync(fourByteBuffer.AsMemory(0, 2)).ConfigureAwait(false);
             var flags = BinaryPrimitives.ReadUInt16BigEndian(fourByteBuffer.AsSpan(0, 2));
             var isExtended = (flags & 0x4000) != 0;
 
@@ -94,14 +94,14 @@ internal class IndexReader(string path, IObjectResolver objectResolver, IFileSys
 
             if (version >= 3 && isExtended)
             {
-                read += await stream.ReadAsync(hash.AsMemory(0, 4));
+                read += await stream.ReadAsync(hash.AsMemory(0, 4)).ConfigureAwait(false);
             }
 
             var path = default(byte[]);
             if (version < 4)
             {
                 path = new byte[length];
-                read += await stream.ReadAsync(path.AsMemory(0, length));
+                read += await stream.ReadAsync(path.AsMemory(0, length)).ConfigureAwait(false);
             }
             else
             {

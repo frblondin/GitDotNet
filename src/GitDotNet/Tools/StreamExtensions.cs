@@ -23,7 +23,7 @@ internal static class StreamExtensions
         var remaining = length;
         while (remaining > 0)
         {
-            var read = await stream.ReadAsync(result.AsMemory(position, (int)remaining));
+            var read = await stream.ReadAsync(result.AsMemory(position, (int)remaining)).ConfigureAwait(false);
             if (read == 0) break;
             remaining -= read;
             position += read;

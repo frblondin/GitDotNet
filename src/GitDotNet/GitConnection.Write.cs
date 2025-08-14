@@ -30,7 +30,7 @@ public partial class GitConnection
         GitCliCommand.Execute(Info.RootFilePath, command, updateEnvironmentVariables: AddCommitter);
         (Objects as IObjectResolverInternal)?.PackManager.UpdatePacks(force: true);
 
-        return await Head.GetTipAsync();
+        return await Head.GetTipAsync().ConfigureAwait(false);
 
         void AddCommitter(StringDictionary env)
         {
@@ -55,7 +55,7 @@ public partial class GitConnection
         {
             transformations(c);
             return Task.FromResult(c);
-        }, commit, options);
+        }, commit, options).ConfigureAwait(false);
 
     /// <summary>
     /// Commits the changes in the transformation composer to the repository.
@@ -72,12 +72,12 @@ public partial class GitConnection
         var canonicalName = Reference.LooksLikeLocalBranch(branchName) ? branchName : $"{Reference.LocalBranchPrefix}{branchName}";
 
         var composer = _transformationComposerFactory(Info.Path);
-        await transformations(composer);
+        await transformations(composer).ConfigureAwait(false);
 
-        var result = await composer.CommitAsync(canonicalName, commit, options);
+        var result = await composer.CommitAsync(canonicalName, commit, options).ConfigureAwait(false);
         (Objects as IObjectResolverInternal)?.PackManager.UpdatePacks(force: true);
 
-        return await Objects.GetAsync<CommitEntry>(result!);
+        return await Objects.GetAsync<CommitEntry>(result!).ConfigureAwait(false);
     }
 
     /// <summary>Creates a new in-memory commit entry before it gets committed to repository.</summary>

@@ -46,7 +46,8 @@ public record IndexEntry
     /// <summary>Retrieves an entry asynchronously./// </summary>
     /// <typeparam name="TEntry">Represents the type of entry being retrieved.</typeparam>
     /// <returns>Returns the entry of the specified type.</returns>
-    public async Task<TEntry> GetEntryAsync<TEntry>() where TEntry : Entry => (TEntry)(_entry ??= await _objectResolver.GetAsync<TEntry>(Id));
+    public async Task<TEntry> GetEntryAsync<TEntry>() where TEntry : Entry =>
+        (TEntry)(_entry ??= await _objectResolver.GetAsync<TEntry>(Id).ConfigureAwait(false));
 
     /// <summary>Prints the members of the <see cref="IndexEntry"/> to the provided <see cref="StringBuilder"/>.</summary>
     /// <param name="builder">The <see cref="StringBuilder"/> to append the member information to.</param>

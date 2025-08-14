@@ -27,12 +27,12 @@ public partial class GitConnection
         options ??= LogOptions.Default;
 
         var endingCommits = options.ExcludeReachableFrom != null ?
-            await GetCommittishAsync(options.ExcludeReachableFrom) :
+            await GetCommittishAsync(options.ExcludeReachableFrom).ConfigureAwait(false) :
             null;
 
         var commitsToProcess = new Queue<LogEntry>();
         var processedCommits = new HashSet<LogEntry>();
-        var startCommit = await GetCommittishAsync<LogEntry>(committish, e => e.ParentIds);
+        var startCommit = await GetCommittishAsync<LogEntry>(committish, e => e.ParentIds).ConfigureAwait(false);
         var previousCommit = startCommit;
         var entryPath = options.Path;
         commitsToProcess.Enqueue(startCommit);
@@ -52,13 +52,13 @@ public partial class GitConnection
             (var continuation, entryPath, lastEntryId) = await CheckContinuationAsync(entryPath,
                                                                                       lastEntryId,
                                                                                       currentCommit,
-                                                                                      previousCommit);
+                                                                                      previousCommit).ConfigureAwait(false);
 
             if (continuation == Continuation.Break) break;
             if (continuation == Continuation.Continue) yield return currentCommit;
             previousCommit = currentCommit;
 
-            await ApplySortTraversal(options, commitsToProcess, processedCommits, currentCommit);
+            await ApplySortTraversalAsync(options, commitsToProcess, processedCommits, currentCommit).ConfigureAwait(false);
         }
     }
 
@@ -69,14 +69,16 @@ public partial class GitConnection
         // Filter by entry
         if (entryPath is not null)
         {
-            var currentRoot = await currentCommit.GetRootTreeAsync();
-            var entry = await currentRoot.GetFromPathAsync(entryPath!);
+            var currentRoot = await currentCommit.GetRootTreeAsync().ConfigureAwait(false);
+            var entry = await currentRoot.GetFromPathAsync(entryPath!).ConfigureAwait(false);
 
             // Entry was not found in the current commit, was it deleted or renamed?
             if (entry is null)
             {
                 // See if the entry was renamed
-                var diff = await CompareAsync(await previousCommit.GetCommitAsync(), await currentCommit.GetCommitAsync());
+                var diff = await CompareAsync(
+                    await previousCommit.GetCommitAsync().ConfigureAwait(false),
+                    await currentCommit.GetCommitAsync().ConfigureAwait(false)).ConfigureAwait(false);
                 var renamed = diff.FirstOrDefault(c => c.Type == ChangeType.Renamed && c.OldPath!.Equals(entryPath));
                 if (renamed is not null)
                 {
@@ -102,24 +104,24 @@ public partial class GitConnection
         return (result, entryPath, lastEntryId);
     }
 
-    private static async Task ApplySortTraversal(LogOptions options,
+    private static async Task ApplySortTraversalAsync(LogOptions options,
                                                  Queue<LogEntry> commitsToProcess,
                                                  HashSet<LogEntry> processedCommits,
                                                  LogEntry currentCommit)
     {
         if (options.SortBy.HasFlag(LogTraversal.FirstParentOnly))
         {
-            await HandleFirstParentCommitAsync(commitsToProcess, processedCommits, currentCommit);
+            await HandleFirstParentCommitAsync(commitsToProcess, processedCommits, currentCommit).ConfigureAwait(false);
         }
         else
         {
-            await HandleCommitParentsAsync(options, commitsToProcess, processedCommits, currentCommit);
+            await HandleCommitParentsAsync(options, commitsToProcess, processedCommits, currentCommit).ConfigureAwait(false);
         }
     }
 
     private static async Task HandleFirstParentCommitAsync(Queue<LogEntry> commitsToProcess, HashSet<LogEntry> processedCommits, LogEntry currentCommit)
     {
-        var parents = await currentCommit.GetParentsAsync();
+        var parents = await currentCommit.GetParentsAsync().ConfigureAwait(false);
         if (parents.Count > 0 && processedCommits.Add(parents[0]))
         {
             commitsToProcess.Enqueue(parents[0]);
@@ -128,7 +130,7 @@ public partial class GitConnection
 
     private static async Task HandleCommitParentsAsync(LogOptions options, Queue<LogEntry> commitsToProcess, HashSet<LogEntry> processedCommits, LogEntry currentCommit)
     {
-        var parents = (IEnumerable<LogEntry>)await currentCommit.GetParentsAsync();
+        var parents = (IEnumerable<LogEntry>)await currentCommit.GetParentsAsync().ConfigureAwait(false);
         if (options.SortBy.HasFlag(LogTraversal.Time))
             parents = parents.OrderBy(p => p.CommitTime);
 
@@ -149,7 +151,7 @@ public partial class GitConnection
         {
             if (e.Data is not null) result = e.Data.Trim();
         });
-        return result != null ? await Objects.GetAsync<CommitEntry>(result) : null;
+        return result != null ? await Objects.GetAsync<CommitEntry>(result).ConfigureAwait(false) : null;
     }
 
     private enum Continuation
