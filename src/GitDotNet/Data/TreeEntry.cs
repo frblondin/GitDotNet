@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using GitDotNet.Readers;
 
@@ -49,7 +50,8 @@ public class TreeEntry : Entry
     /// <param name="basePath">This optional parameter specifies the base path for the blob entries being retrieved.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An enumerable of all blob entries in the tree.</returns>
-    public async IAsyncEnumerable<(GitPath Path, TreeEntryItem BlobEntry)> GetAllBlobEntriesAsync(GitPath? basePath = null, CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<(GitPath Path, TreeEntryItem BlobEntry)> GetAllBlobEntriesAsync(GitPath? basePath = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var channel = Channel.CreateUnbounded<(GitPath Path, TreeEntryItem Stream)>();
         var task = GetAllBlobEntriesAsync(channel, x => x, basePath, cancellationToken).ConfigureAwait(false);
