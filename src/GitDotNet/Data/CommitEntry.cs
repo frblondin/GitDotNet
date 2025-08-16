@@ -12,7 +12,6 @@ public class CommitEntry : Entry
 {
     private const string PendingReading = "<pending reading>";
 
-    private readonly IObjectResolver _objectResolver;
     internal Lazy<Content> _content;
     private readonly HashId? _treeId;
     private TreeEntry? _tree;
@@ -23,9 +22,12 @@ public class CommitEntry : Entry
         : base(EntryType.Commit, id, data)
     {
         _content = new(Parse);
-        _objectResolver = objectResolver;
         _treeId = treeId;
+        ObjectResolver = objectResolver;
     }
+
+    /// <summary>Gets the object resolver used to resolve dependencies and manage object lifetimes.</summary>
+    internal protected IObjectResolver ObjectResolver { get; }
 
     /// <summary>Gets the author of the commit.</summary>
     public Signature? Author => _content.Value.Author;
@@ -55,7 +57,7 @@ public class CommitEntry : Entry
     [ExcludeFromCodeCoverage]
     public async Task<TreeEntry> GetRootTreeAsync() => _tree ??=
         _treeId != null || !string.IsNullOrEmpty(_content.Value.Tree) ?
-        await _objectResolver.GetAsync<TreeEntry>(_treeId ?? _content.Value.Tree.HexToByteArray()).ConfigureAwait(false) :
+        await ObjectResolver.GetAsync<TreeEntry>(_treeId ?? _content.Value.Tree.HexToByteArray()).ConfigureAwait(false) :
         throw new InvalidOperationException("Cannot get tree from a new empty commit.");
 
     /// <summary>Asynchronously gets the parent commits of the current commit.</summary>
@@ -70,7 +72,7 @@ public class CommitEntry : Entry
             var parents = ImmutableList.CreateBuilder<CommitEntry>();
             foreach (var parent in _parentIds)
             {
-                var commit = await _objectResolver.GetAsync<CommitEntry>(parent).ConfigureAwait(false);
+                var commit = await ObjectResolver.GetAsync<CommitEntry>(parent).ConfigureAwait(false);
                 parents.Add(commit);
             }
             return parents.ToImmutable();

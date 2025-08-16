@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
@@ -19,6 +20,7 @@ public partial class GitConnection : IDisposable
 {
     private readonly Lazy<IObjectResolver> _objects;
     private readonly BranchRefReader _branchRefReader;
+    private readonly StashRefReader _stashReader;
     private readonly Lazy<Index> _index;
     private readonly ITreeComparer _comparer;
     private readonly TransformationComposerFactory _transformationComposerFactory;
@@ -29,6 +31,7 @@ public partial class GitConnection : IDisposable
         RepositoryInfoFactory infoFactory,
         ObjectResolverFactory objectsFactory,
         BranchRefReaderFactory branchRefReaderFactory,
+        StashRefReaderFactory stashReaderFactory,
         IndexFactory indexFactory,
         ITreeComparer comparer,
         TransformationComposerFactory transformationComposerFactory,
@@ -41,6 +44,7 @@ public partial class GitConnection : IDisposable
         _transformationComposerFactory = transformationComposerFactory;
         _objects = new(() => objectsFactory(Info.Path, Info.Config.UseCommitGraph));
         _branchRefReader = branchRefReaderFactory(this);
+        _stashReader = stashReaderFactory(this);
         _index = new(() => indexFactory(Info, Objects));
         _fileSystem = fileSystem;
     }
@@ -171,6 +175,10 @@ public partial class GitConnection : IDisposable
         var newCommit = await GetCommittishAsync(@new).ConfigureAwait(false);
         return await CompareAsync(oldCommit, newCommit).ConfigureAwait(false);
     }
+
+    /// <summary>Gets the list of stashes in the repository.</summary>
+    public virtual async Task<IReadOnlyList<Stash>> GetStashesAsync() =>
+        await _stashReader.GetStashesAsync().ConfigureAwait(false);
 
     /// <summary>Determines whether the specified path is a valid Git repository.</summary>
     /// <param name="path">The path to the repository.</param>

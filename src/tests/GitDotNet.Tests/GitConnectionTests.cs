@@ -565,4 +565,30 @@ public class GitConnectionTests
         // Assert
         commit.Id.ToString().Should().Be("a28d9681fdf40631632a42b303be274e3869d5d5");
     }
+
+    [Test]
+    public async Task ReadStash()
+    {
+        // Arrange
+        var source = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        ZipFile.ExtractToDirectory(new MemoryStream(Resource.CompleteRepositoryWithStash), source, overwriteFiles: true);
+        var provider = CreateProvider(out var services);
+        using var connection = provider.Invoke($"{source}/.git");
+
+        // Act
+        var stash = (await connection.GetStashesAsync()).Single();
+        var changes = await stash.GetChangesAsync(includeUntracked: true);
+
+        // Assert
+        using (new AssertionScope())
+        {
+            stash.Id.ToString().Should().Be("c0b174e8828f8bf4a15289ff64f2126646058973");
+            stash.Message.Should().Be("On main: Stash message");
+            changes.Should().HaveCount(2);
+            changes[0].Type.Should().Be(ChangeType.Removed);
+            changes[0].OldPath!.ToString().Should().Be("a.txt");
+            changes[1].Type.Should().Be(ChangeType.Added);
+            changes[1].NewPath!.ToString().Should().Be("b.txt");
+        }
+    }
 }

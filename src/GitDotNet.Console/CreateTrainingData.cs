@@ -8,7 +8,7 @@ using static System.Console;
 
 namespace GitDotNet.Console;
 
-public partial class CreateTrainingData(GitConnectionProvider factory) : BackgroundService
+public partial class CreateTrainingData(GitConnectionProvider factory, IHostApplicationLifetime host) : BackgroundService
 {
     private const string SystemMessage = "You are a coding assistant. You transform git patches and documentation into complete code implementations.";
     private const string AssistantMessage = "[Expected full code implementation based on the patch]";
@@ -76,7 +76,7 @@ public partial class CreateTrainingData(GitConnectionProvider factory) : Backgro
 
         WriteLine();
 
-        await StopAsync(stoppingToken);
+        host.StopApplication();
     }
 
     private static void WriteCommitInstruction(Utf8JsonlWriter writer, PooledMemoryStream patch)
