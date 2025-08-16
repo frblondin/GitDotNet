@@ -34,7 +34,7 @@ public partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnifie
         await GetHeaderAsync(writer, start, end).ConfigureAwait(false);
         GetDiffStat(writer, changes);
 
-        var indexLine = $"index {start?.Id.ToString()[..7] ?? "null"}..{end.Id.ToString()[..7]}";
+        var indexLine = string.Format("index {0}..{1}", start?.Id.ToString()[..7] ?? "null", end.Id.ToString()[..7]);
         foreach (var change in changes)
         {
             await CreatePatchAsync(writer, change, indexLine).ConfigureAwait(false);
@@ -46,11 +46,11 @@ public partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnifie
         var author = end.Author ?? throw new InvalidOperationException("Author is required.");
         if (start != null)
         {
-            await writer.WriteLineAsync($"From {start.Id} {author.Timestamp:ddd MMM dd HH:mm:ss yyyy}").ConfigureAwait(false);
+            await writer.WriteLineAsync(string.Format("From {0} {1:ddd MMM dd HH:mm:ss yyyy}", start.Id, author.Timestamp)).ConfigureAwait(false);
         }
-        await writer.WriteLineAsync($"From: {author.Name} <{author.Email}>").ConfigureAwait(false);
-        await writer.WriteLineAsync($"Date: {author.Timestamp:ddd, dd MMM yyyy HH:mm:ss +0000}").ConfigureAwait(false);
-        await writer.WriteLineAsync($"Subject: [PATCH] {end.Message}").ConfigureAwait(false);
+        await writer.WriteLineAsync(string.Format("From: {0} <{1}>", author.Name, author.Email)).ConfigureAwait(false);
+        await writer.WriteLineAsync(string.Format("Date: {0:ddd, dd MMM yyyy HH:mm:ss +0000}", author.Timestamp)).ConfigureAwait(false);
+        await writer.WriteLineAsync(string.Format("Subject: [PATCH] {0}", end.Message)).ConfigureAwait(false);
         await writer.WriteLineAsync().ConfigureAwait(false);
     }
 

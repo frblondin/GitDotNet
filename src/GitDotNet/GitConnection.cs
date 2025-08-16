@@ -5,12 +5,12 @@ using System.IO.Abstractions;
 using System.Text.RegularExpressions;
 using GitDotNet.Readers;
 using GitDotNet.Tools;
+using Microsoft.Extensions.Logging;
 
 namespace GitDotNet;
 
 /// <summary>Factory delegate for creating a <see cref="GitConnection"/> instance.</summary>
 /// <param name="path">The path to the Git repository.</param>
-/// 
 /// <returns>A new instance of <see cref="GitConnection"/>.</returns>
 public delegate GitConnection GitConnectionProvider(string path);
 
@@ -25,6 +25,7 @@ public partial class GitConnection : IDisposable
     private readonly ITreeComparer _comparer;
     private readonly TransformationComposerFactory _transformationComposerFactory;
     private readonly IFileSystem _fileSystem;
+    private readonly ILogger<GitConnection>? _logger;
     private bool _disposedValue;
 
     internal GitConnection(string path,
@@ -35,10 +36,15 @@ public partial class GitConnection : IDisposable
         IndexFactory indexFactory,
         ITreeComparer comparer,
         TransformationComposerFactory transformationComposerFactory,
-        IFileSystem fileSystem)
+        IFileSystem fileSystem,
+        ILogger<GitConnection>? logger = null)
     {
-        if (!fileSystem.Directory.Exists(path)) throw new DirectoryNotFoundException($"Directory not found: {path}.");
-
+        _logger = logger;
+        if (!fileSystem.Directory.Exists(path))
+        {
+            _logger?.LogWarning("Directory not found: {Path}.", path);
+            throw new DirectoryNotFoundException($"Directory not found: {path}.");
+        }
         Info = infoFactory(path);
         _comparer = comparer;
         _transformationComposerFactory = transformationComposerFactory;
@@ -47,6 +53,7 @@ public partial class GitConnection : IDisposable
         _stashReader = stashReaderFactory(this);
         _index = new(() => indexFactory(Info, Objects));
         _fileSystem = fileSystem;
+        _logger?.LogDebug("GitConnection initialized for path: {Path}", path);
     }
 
     /// <summary>Gets the <see cref="RepositoryInfo"/> instance associated with the repository.</summary>

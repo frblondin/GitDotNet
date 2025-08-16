@@ -6,6 +6,7 @@ using GitDotNet.Tests.Helpers;
 using GitDotNet.Tests.Properties;
 using GitDotNet.Tools;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.IO.Abstractions.TestingHelpers;
 using System.Text;
@@ -81,12 +82,13 @@ public class PackReaderTests
         var objects = A.Fake<ObjectResolver>(o => o.WithArgumentsForConstructor(() =>
             new(".git", true,
                 Options.Create(new GitConnection.Options()),
-                path => new PackManager(path, fileSystem, A.Fake<PackReaderFactory>()),
+                path => new PackManager(path, fileSystem, A.Fake<PackReaderFactory>(), null),
                 path => CreateLooseReader(path, fileSystem),
                 path => CreateLfsReader(path, fileSystem),
                 (_, _) => A.Fake<CommitGraphReader>(),
                 A.Fake<IMemoryCache>(),
-                fileSystem)));
+                fileSystem,
+                null)));
         sut = new PackReader(fileSystem.CreateOffsetReader(".git/objects/packs/data.pack"),
             async path => await PackIndexReader.LoadAsync(path, fileSystem));
     }

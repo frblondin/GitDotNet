@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace GitDotNet.Readers;
 
@@ -10,14 +11,12 @@ internal delegate Task<PackIndexReader> PackIndexFactory(string path);
 internal class PackIndexReader(string path, int version, int[] fanout, byte[] packChecksum, byte[] checksum, IFileSystem fileSystem)
 {
     private const int FanOutTableSize = 256;
-
-    private readonly int[] _fanout = fanout;
     private readonly byte[] _data = fileSystem.File.ReadAllBytes(path);
 
     public int Version { get; } = version;
     public byte[] PackChecksum { get; } = packChecksum;
     public byte[] Checksum { get; } = checksum;
-    public int Count => _fanout[FanOutTableSize - 1];
+    public int Count => fanout[FanOutTableSize - 1];
 
     private int SortedObjectNamesOffset => Version switch
     {
@@ -44,11 +43,13 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         _ => throw new NotSupportedException($"Version {Version} is not supported.")
     };
 
-    public static async Task<PackIndexReader> LoadAsync(string path, IFileSystem fileSystem)
+    public static async Task<PackIndexReader> LoadAsync(string path, IFileSystem fileSystem, ILogger<PackIndexReader>? logger = null)
     {
+        logger?.LogInformation("Loading pack index file: {Path}", path);
         if (!fileSystem.File.Exists(path))
         {
-            throw new FileNotFoundException($"Pack index file not found: {path}");
+            logger?.LogWarning("Pack index file not found: {Path}", path);
+            throw new FileNotFoundException("Pack index file not found: {Path}", path);
         }
         await using var stream = fileSystem.File.OpenReadAsynchronous(path);
         var fourByteBuffer = ArrayPool<byte>.Shared.Rent(4);
@@ -70,7 +71,14 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
             var checksum = new byte[ObjectResolver.HashLength];
             await stream.ReadExactlyAsync(packChecksum).ConfigureAwait(false);
 
-            return new PackIndexReader(path, version, fanout, packChecksum, checksum, fileSystem);
+            var packIndexReader = new PackIndexReader(path, version, fanout, packChecksum, checksum, fileSystem);
+            logger?.LogInformation("Successfully loaded pack index file: {Path}, version: {Version}, object count: {ObjectCount}", path, version, fanout[FanOutTableSize - 1]);
+            return packIndexReader;
+        }
+        catch (Exception ex)
+        {
+            logger?.LogError(ex, "Error loading pack index file: {Path}", path);
+            throw;
         }
         finally
         {
@@ -89,7 +97,7 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
                 return await GetHashAsync(i).ConfigureAwait(false);
             }
         }
-        throw new NotSupportedException($"Couldn't find the corresponding hash for offset {offset} in pack index {path}.");
+        throw new NotSupportedException($"Couldn't find the corresponding hash for offset {offset} in pack index {this.GetType().Name}.");
     }
 
     public async Task<HashId> GetHashAsync(int index)
@@ -106,8 +114,8 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         using var stream = new MemoryStream(_data, writable: false);
         var hashBuffer = new byte[ObjectResolver.HashLength];
         var fanoutPosition = id.Hash[0];
-        var end = _fanout[fanoutPosition];
-        var start = fanoutPosition > 0 ? _fanout[fanoutPosition - 1] : 0;
+        var end = fanout[fanoutPosition];
+        var start = fanoutPosition > 0 ? fanout[fanoutPosition - 1] : 0;
 
         stream.Seek(SortedObjectNamesOffset + start * 20, SeekOrigin.Begin);
 

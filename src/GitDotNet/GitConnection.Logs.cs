@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using GitDotNet.Tools;
+using Microsoft.Extensions.Logging;
 
 namespace GitDotNet;
 
@@ -13,9 +14,11 @@ public partial class GitConnection
     public IAsyncEnumerable<LogEntry> GetLogAsync(string committish, LogOptions? options = null,
         CancellationToken token = default)
     {
+        _logger?.LogInformation("Getting log for committish: {Committish} with options: {Options}", committish, options);
         var result = GetChildFirstLogAsync(committish, options, token);
         if (options?.SortBy.HasFlag(LogTraversal.Topological) ?? false)
         {
+            _logger?.LogDebug("Reversing log result due to Topological sort option.");
             result = result.Reverse();
         }
         return result;
@@ -25,6 +28,7 @@ public partial class GitConnection
         [EnumeratorCancellation] CancellationToken token = default)
     {
         options ??= LogOptions.Default;
+        _logger?.LogDebug("Starting child-first log traversal for committish: {Committish}", committish);
 
         var endingCommits = options.ExcludeReachableFrom != null ?
             await GetCommittishAsync(options.ExcludeReachableFrom).ConfigureAwait(false) :
@@ -43,21 +47,27 @@ public partial class GitConnection
             token.ThrowIfCancellationRequested();
 
             var currentCommit = commitsToProcess.Dequeue();
+            _logger?.LogDebug("Processing commit: {CommitId}", currentCommit.CommitId);
 
             if (options.Start.HasValue && currentCommit.CommitTime < options.Start.Value) continue;
             if (options.End.HasValue && currentCommit.CommitTime > options.End.Value) continue;
             if (endingCommits?.Equals(currentCommit) ?? false) continue;
 
-            // Do not yield the commit if the entity hasn't changed or if entity didn't exist in the previous commit
             (var continuation, entryPath, lastEntryId) = await CheckContinuationAsync(entryPath,
                                                                                       lastEntryId,
                                                                                       currentCommit,
                                                                                       previousCommit).ConfigureAwait(false);
-
-            if (continuation == Continuation.Break) break;
-            if (continuation == Continuation.Continue) yield return currentCommit;
+            if (continuation == Continuation.Break)
+            {
+                _logger?.LogInformation("Breaking log traversal at commit: {CommitId}", currentCommit.CommitId);
+                break;
+            }
+            if (continuation == Continuation.Continue)
+            {
+                _logger?.LogDebug("Yielding commit: {CommitId}", currentCommit.CommitId);
+                yield return currentCommit;
+            }
             previousCommit = currentCommit;
-
             await ApplySortTraversalAsync(options, commitsToProcess, processedCommits, currentCommit).ConfigureAwait(false);
         }
     }
@@ -65,36 +75,31 @@ public partial class GitConnection
     private async Task<(Continuation, GitPath? EntryPath, HashId? LastEntryId)> CheckContinuationAsync(GitPath? entryPath, HashId? lastEntryId, LogEntry currentCommit, LogEntry previousCommit)
     {
         var result = Continuation.Continue;
-
-        // Filter by entry
         if (entryPath is not null)
         {
             var currentRoot = await currentCommit.GetRootTreeAsync().ConfigureAwait(false);
             var entry = await currentRoot.GetFromPathAsync(entryPath!).ConfigureAwait(false);
-
-            // Entry was not found in the current commit, was it deleted or renamed?
             if (entry is null)
             {
-                // See if the entry was renamed
                 var diff = await CompareAsync(
                     await previousCommit.GetCommitAsync().ConfigureAwait(false),
                     await currentCommit.GetCommitAsync().ConfigureAwait(false)).ConfigureAwait(false);
                 var renamed = diff.FirstOrDefault(c => c.Type == ChangeType.Renamed && c.OldPath!.Equals(entryPath));
                 if (renamed is not null)
                 {
-                    // From then on, the entry will be known by the new path
                     entryPath = renamed.NewPath!;
+                    _logger?.LogInformation("Entry path renamed from {OldPath} to {NewPath}", entryPath, renamed.NewPath);
                 }
                 else
                 {
-                    // The entry was deleted, previous ancestors will not possibly have the entry
                     result = Continuation.Break;
+                    _logger?.LogInformation("Entry path {EntryPath} deleted at commit: {CommitId}", entryPath, currentCommit.CommitId);
                 }
             }
             else if (entry.Id.Equals(lastEntryId))
             {
-                // The entry hasn't changed, skip the commit as it's not relevant
                 result = Continuation.Skip;
+                _logger?.LogDebug("Entry {EntryPath} unchanged in commit: {CommitId}", entryPath, currentCommit.CommitId);
             }
             else
             {
@@ -102,6 +107,27 @@ public partial class GitConnection
             }
         }
         return (result, entryPath, lastEntryId);
+    }
+
+    /// <summary>Retrieves the merge base commit between two specified commits asynchronously.</summary>
+    /// <param name="committish1">The identifier of the first commit to compare for the merge base.</param>
+    /// <param name="committish2">The commit entry of the second commit used in the comparison.</param>
+    /// <returns>Returns the merge base commit entry or null if no merge base exists.</returns>
+    public async Task<CommitEntry?> GetMergeBaseAsync(string committish1, string committish2)
+    {
+        _logger?.LogInformation("Finding merge base between {Committish1} and {Committish2}", committish1, committish2);
+        string? result = null;
+        GitCliCommand.Execute(Info.Path, $"merge-base {committish1} {committish2}", outputDataReceived: (_, e) =>
+        {
+            if (e.Data is not null) result = e.Data.Trim();
+        });
+        if (result != null)
+        {
+            _logger?.LogDebug("Merge base found: {Result}", result);
+            return await Objects.GetAsync<CommitEntry>(result).ConfigureAwait(false);
+        }
+        _logger?.LogWarning("No merge base found between {Committish1} and {Committish2}", committish1, committish2);
+        return null;
     }
 
     private static async Task ApplySortTraversalAsync(LogOptions options,
@@ -138,20 +164,6 @@ public partial class GitConnection
         {
             commitsToProcess.Enqueue(parent);
         }
-    }
-
-    /// <summary>Retrieves the merge base commit between two specified commits asynchronously.</summary>
-    /// <param name="committish1">The identifier of the first commit to compare for the merge base.</param>
-    /// <param name="committish2">The commit entry of the second commit used in the comparison.</param>
-    /// <returns>Returns the merge base commit entry or null if no merge base exists.</returns>
-    public async Task<CommitEntry?> GetMergeBaseAsync(string committish1, string committish2)
-    {
-        string? result = null;
-        GitCliCommand.Execute(Info.Path, $"merge-base {committish1} {committish2}", outputDataReceived: (_, e) =>
-        {
-            if (e.Data is not null) result = e.Data.Trim();
-        });
-        return result != null ? await Objects.GetAsync<CommitEntry>(result).ConfigureAwait(false) : null;
     }
 
     private enum Continuation

@@ -2,12 +2,13 @@ using System.Buffers;
 using System.IO.Abstractions;
 using System.IO.Compression;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace GitDotNet.Readers;
 
 internal delegate LooseReader LooseReaderFactory(string path);
 
-internal class LooseReader(string path, IFileSystem fileSystem)
+internal class LooseReader(string path, IFileSystem fileSystem, ILogger<LooseReader>? logger = null)
 {
     private const int HeaderMaxLength = 10;
     private const int SizeMaxLength = 64;
@@ -21,17 +22,27 @@ internal class LooseReader(string path, IFileSystem fileSystem)
 
     public virtual (EntryType Type, Func<Stream>? DataProvider, long Length) TryLoad(string hexString)
     {
+        logger?.LogDebug("TryLoad called for {HexString}", hexString);
         var objectPath = GetObjectPath(fileSystem, hexString);
         if (!fileSystem.File.Exists(objectPath))
         {
+            logger?.LogDebug("Object {HexString} not found at path {ObjectPath}.", hexString, objectPath);
             return (default, default, -1);
         }
-
-        using var stream = GetZLibStream(objectPath);
-        var position = 0;
-        var type = GetType(stream, ref position);
-        var length = GetLength(stream, ref position);
-        return (type, CreateStreamProvider(objectPath, position), length);
+        try
+        {
+            using var stream = GetZLibStream(objectPath);
+            var position = 0;
+            var type = GetType(stream, ref position);
+            var length = GetLength(stream, ref position);
+            logger?.LogDebug("Object {HexString} loaded: type={Type}, length={Length}", hexString, type, length);
+            return (type, CreateStreamProvider(objectPath, position), length);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger?.LogError(ex, "Error loading object {HexString} at {ObjectPath}.", hexString, objectPath);
+            throw;
+        }
     }
 
     private Func<Stream> CreateStreamProvider(string objectPath, int position) =>
@@ -75,6 +86,7 @@ internal class LooseReader(string path, IFileSystem fileSystem)
 
     protected string GetObjectPath(IFileSystem fileSystem, string hexString)
     {
+        logger?.LogDebug("GetObjectPath called for {HexString}", hexString);
         string objectPath;
         var folder = fileSystem.Path.Combine(path, GetObjectFolder(hexString));
         var fileName = GetFileName(hexString);
@@ -82,7 +94,10 @@ internal class LooseReader(string path, IFileSystem fileSystem)
         {
             var files = fileSystem.Directory.GetFiles(folder, $"{fileName}*");
             if (files.Length > 1)
+            {
+                logger?.LogWarning("Ambiguous hash {HexString} found in folder {Folder}.", hexString, folder);
                 throw new AmbiguousHashException();
+            }
             objectPath = files.Length == 1 ? files[0] : "";
         }
         else

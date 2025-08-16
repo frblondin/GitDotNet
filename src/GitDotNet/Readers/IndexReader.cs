@@ -3,18 +3,25 @@ using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.IO.Abstractions;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace GitDotNet.Readers;
 
 internal delegate IndexReader IndexReaderFactory(string path, IObjectResolver objectResolver);
 
-internal class IndexReader(string path, IObjectResolver objectResolver, IFileSystem fileSystem)
+internal class IndexReader(string path, IObjectResolver objectResolver, IFileSystem fileSystem, ILogger<IndexReader>? logger = null)
 {
+
     /// <summary>Gets the entries from the index file asynchronously.</summary>
     /// <returns>A task that represents the asynchronous operation. The task result contains a list of <see cref="IndexEntry"/> instances.</returns>
     public async Task<IImmutableList<IndexEntry>> GetEntriesAsync()
     {
-        if (!fileSystem.File.Exists(path)) return [];
+        logger?.LogInformation("Getting index entries from: {Path}", path);
+        if (!fileSystem.File.Exists(path))
+        {
+            logger?.LogWarning("Index file does not exist: {Path}", path);
+            return [];
+        }
 
         var fourByteBuffer = ArrayPool<byte>.Shared.Rent(4);
         using var stream = fileSystem.File.OpenReadAsynchronous(path);

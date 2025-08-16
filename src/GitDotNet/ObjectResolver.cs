@@ -4,6 +4,7 @@ using System.IO.Abstractions;
 using GitDotNet.Readers;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 
 namespace GitDotNet;
 
@@ -19,18 +20,22 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     private readonly Lazy<CommitGraphReader?> _commitReader;
     private readonly LfsReader _lfsReader;
     private readonly IMemoryCache _memoryCache;
+    private readonly ILogger<ObjectResolver>? _logger;
     private readonly CancellationTokenSource _disposed = new();
     private bool _disposedValue;
 
     internal ObjectResolver(string repositoryPath, bool useReadCommitGraph,
-                            IOptions<GitConnection.Options> options,
-                            PackManagerFactory packManagerFactory,
-                            LooseReaderFactory looseReaderFactory,
-                            LfsReaderFactory lfsReaderFactory,
-                            CommitGraphReaderFactory commitReaderFactory,
-                            IMemoryCache memoryCache,
-                            IFileSystem fileSystem)
+        IOptions<GitConnection.Options> options,
+        PackManagerFactory packManagerFactory,
+        LooseReaderFactory looseReaderFactory,
+        LfsReaderFactory lfsReaderFactory,
+        CommitGraphReaderFactory commitReaderFactory,
+        IMemoryCache memoryCache,
+        IFileSystem fileSystem,
+        ILogger<ObjectResolver>? logger = null)
     {
+        _logger = logger;
+        _logger?.LogDebug("ObjectResolver constructed for repositoryPath={RepositoryPath}, useReadCommitGraph={UseReadCommitGraph}", repositoryPath, useReadCommitGraph);
         Path = fileSystem.Path.Combine(repositoryPath, "objects");
         _useReadCommitGraph = useReadCommitGraph;
         _options = options;
@@ -54,10 +59,14 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
 
     internal async Task<UnlinkedEntry> GetUnlinkedEntryAsync(HashId id, bool throwIfNotFound) =>
         (await _memoryCache.GetOrCreateAsync((id, nameof(UnlinkedEntry)),
-            async entry => await ReadUnlinkedEntryAsync(entry, id, throwIfNotFound).ConfigureAwait(false)).ConfigureAwait(false))!;
+            async entry => {
+                _logger?.LogDebug("Cache miss for UnlinkedEntry {HashId}", id);
+                return await ReadUnlinkedEntryAsync(entry, id, throwIfNotFound).ConfigureAwait(false);
+            }).ConfigureAwait(false))!;
 
     private async Task<UnlinkedEntry?> ReadUnlinkedEntryAsync(ICacheEntry entry, HashId id, bool throwIfNotFound)
     {
+        _logger?.LogDebug("ReadUnlinkedEntryAsync called for {HashId}, throwIfNotFound={ThrowIfNotFound}", id, throwIfNotFound);
         const int attempts = 1;
         const int delayInMs = 100;
 
@@ -83,10 +92,11 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     private async Task<UnlinkedEntry?> ReadUnlinkedEntryAsync(HashId id, bool throwIfNotFound)
     {
         ObjectDisposedException.ThrowIf(_disposedValue, this);
-
+        _logger?.LogDebug("ReadUnlinkedEntryAsync (inner) for {HashId}", id);
         // Read loose object
         var hexString = id.ToString();
         var (type, dataProvider, length) = _looseObjects.TryLoad(hexString);
+        _logger?.LogDebug("TryLoad result for {HexString}: type={Type}, hasDataProvider={HasDataProvider}, length={Length}", hexString, type, dataProvider != null, length);
         if (dataProvider is not null)
         {
             using var stream = dataProvider();
@@ -94,6 +104,8 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         }
         else
         {
+            if (throwIfNotFound)
+                _logger?.LogDebug("Object {HexString} not found in loose objects.", hexString);
             return await LoadFromPacksAsync(id, GetDependentObjectAsync, throwIfNotFound).ConfigureAwait(false);
         }
     }
@@ -163,6 +175,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
 
     private async Task<(PackReader? pack, int index)> FindPackAsync(HashId id, bool throwIfNotFound)
     {
+        _logger?.LogDebug("FindPackAsync called for {HashId}", id);
         var foundPack = default(PackReader?);
         var foundIndex = -1;
         foreach (var pack in PackManager.PackReaders)
@@ -170,13 +183,21 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
             var index = await pack.IndexOfAsync(id).ConfigureAwait(false);
             if (index != -1)
             {
-                if (id.Hash.Count < HashLength && foundPack is not null) throw new AmbiguousHashException();
+                if (id.Hash.Count < HashLength && foundPack is not null)
+                {
+                    _logger?.LogWarning("Ambiguous hash {HashId} found in multiple packs.", id);
+                    throw new AmbiguousHashException();
+                }
                 foundPack = pack;
                 foundIndex = index;
                 if (id.Hash.Count >= HashLength) return (foundPack, foundIndex);
             }
         }
-        if (foundPack is null && throwIfNotFound) throw new KeyNotFoundException($"Hash {id} could not be found.");
+        if (foundPack is null && throwIfNotFound)
+        {
+            _logger?.LogWarning("Hash {HashId} could not be found in any pack.", id);
+            throw new KeyNotFoundException($"Hash {id} could not be found.");
+        }
         return (foundPack, foundIndex);
     }
 
@@ -199,14 +220,15 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         {
             if (disposing)
             {
+                _logger?.LogDebug("ObjectResolver disposing managed resources");
                 if (_commitReader.IsValueCreated)
                     _commitReader.Value?.Dispose();
                 PackManager?.Dispose();
+                _logger?.LogInformation("ObjectResolver disposed.");
             }
             if (!(_disposed?.IsCancellationRequested ?? false))
                 _disposed!.Cancel();
             _disposed?.Dispose();
-
             _disposedValue = true;
         }
     }

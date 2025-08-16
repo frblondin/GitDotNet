@@ -1,4 +1,5 @@
 using GitDotNet.Tools;
+using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
@@ -7,7 +8,7 @@ namespace GitDotNet.Readers;
 
 internal delegate PackReader PackReaderFactory(string path);
 
-internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexFactory indexFactory) : IDisposable
+internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexFactory indexFactory, ILogger<PackReader>? logger = null) : IDisposable
 {
     private PackIndexReader? _index;
     private ConcurrentDictionary<long, Task<UnlinkedEntry>> _cache = new();
@@ -18,12 +19,20 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
 
     public async Task<int> IndexOfAsync(HashId id)
     {
+        logger?.LogInformation("Getting index of hash: {Id}", id);
         var indexReader = await EnsureIndex().ConfigureAwait(false);
         return await indexReader.GetIndexOfAsync(id).ConfigureAwait(false);
     }
 
-    private async Task<PackIndexReader> EnsureIndex() =>
-        _index ??= await indexFactory(Path.ChangeExtension(offsetStreamReader.Path, "idx")).ConfigureAwait(false);
+    private async Task<PackIndexReader> EnsureIndex()
+    {
+        if (_index == null)
+        {
+            logger?.LogDebug("Loading pack index for path: {OffsetStreamReaderPath}", offsetStreamReader.Path);
+            _index = await indexFactory(Path.ChangeExtension(offsetStreamReader.Path, "idx")).ConfigureAwait(false);
+        }
+        return _index;
+    }
 
     public async Task<UnlinkedEntry> GetAsync(int indexPosition, HashId id, Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider)
     {
@@ -267,6 +276,7 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
                 if (!_disposed.IsCancellationRequested) _disposed.Cancel();
                 _disposed.Dispose();
                 offsetStreamReader.Dispose();
+                logger?.LogDebug("PackReader disposed.");
             }
 
             _disposedValue = true;
