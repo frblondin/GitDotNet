@@ -4,7 +4,7 @@ using static System.Console;
 
 namespace GitDotNet.Console;
 
-public class CompareCommits(GitConnectionProvider factory) : BackgroundService
+public class CompareCommits(GitConnectionProvider factory, IHostApplicationLifetime host) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -12,7 +12,7 @@ public class CompareCommits(GitConnectionProvider factory) : BackgroundService
         using var connection = factory.Invoke(path);
         var diffs = await connection.CompareAsync("HEAD~1", "HEAD");
         PrintDiffs(diffs);
-        await StopAsync(stoppingToken);
+        host.StopApplication();
     }
 
     private static void PrintDiffs(IList<Change> diffs)

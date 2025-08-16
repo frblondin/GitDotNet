@@ -26,9 +26,9 @@ public partial class GitPatchCreator(int unified = GitPatchCreator.DefaultUnifie
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(unified, 2);
 
-        using var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true)
+        using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true)
         {
-            NewLine = "\n"
+            NewLine = "\n",
         };
 
         await GetHeaderAsync(writer, start, end).ConfigureAwait(false);

@@ -4,7 +4,7 @@ using static System.Console;
 
 namespace GitDotNet.Console;
 
-public class BlobLogCommitHistory(GitConnectionProvider factory) : BackgroundService
+public class BlobLogCommitHistory(GitConnectionProvider factory, IHostApplicationLifetime host) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -25,6 +25,6 @@ public class BlobLogCommitHistory(GitConnectionProvider factory) : BackgroundSer
                 commit.Message;
             WriteLine($"{commit.Id} {messagePreview.ReplaceLineEndings("")}");
         }
-        await StopAsync(stoppingToken);
+        host.StopApplication();
     }
 }

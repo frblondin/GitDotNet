@@ -47,6 +47,7 @@ public static class ServiceConfiguration
                 sp.GetRequiredService<RepositoryInfoFactory>(),
                 sp.GetRequiredService<ObjectResolverFactory>(),
                 sp.GetRequiredService<BranchRefReaderFactory>(),
+                sp.GetRequiredService<StashRefReaderFactory>(),
                 sp.GetRequiredService<IndexFactory>(),
                 sp.GetRequiredService<ITreeComparer>(),
                 sp.GetRequiredService<TransformationComposerFactory>(),
@@ -83,7 +84,7 @@ public static class ServiceConfiguration
         .AddScoped<BranchRefReaderFactory>(sp => (connection) =>
             new(connection,
                 sp.GetRequiredService<IFileSystem>()))
-       .AddScoped<LooseReaderFactory>(sp => path =>
+        .AddScoped<LooseReaderFactory>(sp => path =>
             new(path,
                 sp.GetRequiredService<IFileSystem>()))
         .AddScoped<LfsReaderFactory>(sp => path =>
@@ -97,6 +98,8 @@ public static class ServiceConfiguration
         .AddScoped<PackReaderFactory>(sp => (string path) =>
             new(sp.GetRequiredService<FileOffsetStreamReaderFactory>().Invoke(path),
                 sp.GetRequiredService<PackIndexFactory>()))
+        .AddScoped<StashRefReaderFactory>(sp => connection =>
+            new StashRefReader(connection, sp.GetRequiredService<IFileSystem>()))
         .AddScoped<PackIndexFactory>(sp => async path =>
             await PackIndexReader.LoadAsync(path, sp.GetRequiredService<IFileSystem>()))
         .AddScoped<IPackManager, PackManager>();
