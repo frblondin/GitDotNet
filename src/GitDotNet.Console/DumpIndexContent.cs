@@ -4,7 +4,7 @@ using static System.Console;
 
 namespace GitDotNet.Console;
 
-public class DumpIndexContent(GitConnectionProvider factory) : BackgroundService
+public class DumpIndexContent(GitConnectionProvider factory, IHostApplicationLifetime host) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -12,7 +12,7 @@ public class DumpIndexContent(GitConnectionProvider factory) : BackgroundService
         using var connection = factory.Invoke(path);
         var entries = await connection.Index.GetEntriesAsync().ConfigureAwait(false);
         Print(entries);
-        await StopAsync(stoppingToken).ConfigureAwait(false);
+        host.StopApplication();
     }
 
     private static void Print(IEnumerable<IndexEntry> entries)

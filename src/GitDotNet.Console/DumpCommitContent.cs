@@ -6,7 +6,7 @@ using static GitDotNet.Console.Tools.InfoInput;
 
 namespace GitDotNet.Console;
 
-public class DumpCommitContent(GitConnectionProvider factory) : BackgroundService
+public class DumpCommitContent(GitConnectionProvider factory, IHostApplicationLifetime host) : BackgroundService
 {
     public const bool ShowBlobContent = false;
 
@@ -29,6 +29,6 @@ public class DumpCommitContent(GitConnectionProvider factory) : BackgroundServic
             return (data.Path, stream.Length);
         }, cancellationToken: stoppingToken);
         WriteLine("Completed reading repository in {0} ms", stopwatch.ElapsedMilliseconds);
-        await StopAsync(stoppingToken);
+        host.StopApplication();
     }
 }
