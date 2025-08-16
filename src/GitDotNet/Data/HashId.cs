@@ -38,6 +38,9 @@ public sealed partial class HashId : IEquatable<HashId>, IComparable<HashId>, IC
     /// <summary>Gets the hash value.</summary>
     public IReadOnlyList<byte> Hash { get; }
 
+    /// <summary>Gets a value indicating whether this <see cref="HashId"/> is null, empty, or contains only zeros.</summary>
+    public bool IsNull => _hash == null || _hash.Length == 0 || _hash.All(b => b == 0);
+
     /// <summary>Returns the hash code for this instance.</summary>
     /// <returns>The hash code for this instance.</returns>
     public override int GetHashCode() => _hash.Length > 0 ? BitConverter.ToInt32(_hash.AsSpan(0, 4)) : 0;

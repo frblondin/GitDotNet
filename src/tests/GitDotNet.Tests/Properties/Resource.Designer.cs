@@ -138,6 +138,16 @@ namespace GitDotNet.Tests.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Byte[].
         /// </summary>
+        internal static byte[] CompleteRepositoryWithStash {
+            get {
+                object obj = ResourceManager.GetObject("CompleteRepositoryWithStash", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized resource of type System.Byte[].
+        /// </summary>
         internal static byte[] CompleteMergeRepository {
             get {
                 object obj = ResourceManager.GetObject("CompleteMergeRepository", resourceCulture);
