@@ -2,18 +2,21 @@ using System.Collections.Immutable;
 using System.IO.Abstractions;
 using System.Text.RegularExpressions;
 using GitDotNet.Tools;
+using Microsoft.Extensions.Logging;
 
 namespace GitDotNet.Readers;
 
 internal delegate BranchRefReader BranchRefReaderFactory(GitConnection connection);
 
-internal partial class BranchRefReader(GitConnection connection, IFileSystem fileSystem)
+internal partial class BranchRefReader(GitConnection connection, IFileSystem fileSystem, ILogger<BranchRefReader>? logger = null)
 {
     internal IImmutableDictionary<string, Branch> GetBranches()
     {
+        logger?.LogInformation("Getting branches for repository: {Path}", connection.Info.Path);
         var branches = new SortedSet<Branch>();
         GetBranchesFromRefsDirectory(branches);
         GetBranchesFromPackedRefsFile(branches);
+        logger?.LogDebug("Found {BranchCount} branches.", branches.Count);
         return branches.ToImmutableDictionary(b => b.CanonicalName);
     }
 
@@ -23,6 +26,7 @@ internal partial class BranchRefReader(GitConnection connection, IFileSystem fil
 
         if (fileSystem.File.Exists(refsFilePath))
         {
+            logger?.LogDebug("Reading packed-refs file: {RefsFilePath}", refsFilePath);
             var lines = fileSystem.File.ReadAllLines(refsFilePath);
 
             foreach (var line in lines)
@@ -34,6 +38,7 @@ internal partial class BranchRefReader(GitConnection connection, IFileSystem fil
                     var canonicalName = match.Groups[2].Value;
                     var branch = new Branch(canonicalName, connection, () => hash);
                     branches.Add(branch);
+                    logger?.LogDebug("Added branch from packed-refs: {CanonicalName}", canonicalName);
                 }
             }
         }
@@ -45,6 +50,7 @@ internal partial class BranchRefReader(GitConnection connection, IFileSystem fil
 
         if (!fileSystem.Directory.Exists(refsPath))
         {
+            logger?.LogWarning("Refs directory does not exist: {RefsPath}", refsPath);
             return;
         }
         var localBranchesPath = Path.Combine(refsPath, "heads");
@@ -59,6 +65,7 @@ internal partial class BranchRefReader(GitConnection connection, IFileSystem fil
             foreach (var branch in localBranches)
             {
                 branches.Add(branch);
+                logger?.LogDebug("Added local branch: {CanonicalName}", branch.CanonicalName);
             }
         }
 
@@ -71,12 +78,14 @@ internal partial class BranchRefReader(GitConnection connection, IFileSystem fil
             foreach (var branch in remoteBranches)
             {
                 branches.Add(branch);
+                logger?.LogDebug("Added remote branch: {CanonicalName}", branch.CanonicalName);
             }
         }
 
         HashId ReadTip(string file)
         {
             var content = fileSystem.File.ReadAllText(file);
+            logger?.LogDebug("Read tip for branch file: {File}", file);
             return new HashId(content.Trim('.', '\r', '\n'));
         }
     }

@@ -1,25 +1,27 @@
 using System.Threading.Channels;
-using GitDotNet.Tools;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 using AddedOrRemovedBlobEntryPath = (bool IsNew, (GitDotNet.GitPath Path, GitDotNet.TreeEntryItem Blob) Element);
 using BlobEntryPath = (GitDotNet.GitPath Path, GitDotNet.TreeEntryItem Blob);
-using System.Linq;
 
 namespace GitDotNet;
 
-internal class TreeComparer(IOptions<GitConnection.Options> options) : ITreeComparer
+internal class TreeComparer(IOptions<GitConnection.Options> options, ILogger<TreeComparer>? logger = null) : ITreeComparer
 {
     public virtual async Task<IList<Change>> CompareAsync(TreeEntry? old, TreeEntry? @new)
     {
+        logger?.LogDebug("Comparing trees: old={{id={OldId}}}, new={{id={NewId}}}", old?.Id, @new?.Id);
         var result = new List<Change>();
 
         var oldBlobs = old is not null ? GetDivergingBlobEntries(old, @new).ToEnumerable().ToList() : null;
         var newBlobs = @new is not null ? GetDivergingBlobEntries(@new, old).ToEnumerable().ToList() : null;
+        logger?.LogDebug("Found {OldBlobsCount} old blobs and {NewBlobsCount} new blobs.", oldBlobs?.Count ?? 0, newBlobs?.Count ?? 0);
 
         FindModifiedBlobsUsingIds(result, oldBlobs, newBlobs);
         FindRenamedBlobsWithSameId(result, oldBlobs, newBlobs);
         await FindRenamedBlobsWithSimilarity(options, result).ConfigureAwait(false);
 
+        logger?.LogDebug("CompareAsync completed. Changes found: {ChangeCount}", result.Count);
         return [.. result.OrderBy(c => c.NewPath ?? c.OldPath)];
     }
 

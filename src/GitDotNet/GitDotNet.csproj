@@ -14,6 +14,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
 		<PackageReference Include="Microsoft.Extensions.ObjectPool" />
 		<PackageReference Include="Nito.AsyncEx.Coordination" />
 		<PackageReference Include="spkl.Diffs" />

@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 using GitDotNet.Tools;
+using Microsoft.Extensions.Logging;
 
 namespace GitDotNet.Readers;
 
@@ -9,9 +10,13 @@ internal partial class CommitGraphReader
 {
     private sealed class GraphFile : IDisposable
     {
-        public GraphFile(IFileOffsetStreamReader reader)
+        private readonly ILogger<GraphFile>? _logger;
+
+        public GraphFile(IFileOffsetStreamReader reader, ILogger<GraphFile>? logger = null)
         {
             Reader = reader;
+            _logger = logger;
+            _logger?.LogDebug("GraphFile initialized for reader path: {Path}", reader.Path);
             var fourByteBuffer = ArrayPool<byte>.Shared.Rent(4);
             var eightByteBuffer = ArrayPool<byte>.Shared.Rent(8);
             try
@@ -119,6 +124,7 @@ internal partial class CommitGraphReader
 
         internal int LocateCommitInLookupTable(HashId commitHash)
         {
+            _logger?.LogDebug("Locating commit in lookup table: {CommitHash}", commitHash);
             var start = commitHash.Hash[0] == 0 ? 0 : FanOutTable[commitHash.Hash[0] - 1];
             var end = FanOutTable[commitHash.Hash[0]];
             var commitIndex = -1;
@@ -182,6 +188,7 @@ internal partial class CommitGraphReader
             {
                 if (disposing)
                 {
+                    _logger?.LogDebug("Disposing GraphFile managed resources");
                     Reader.Dispose();
                 }
 

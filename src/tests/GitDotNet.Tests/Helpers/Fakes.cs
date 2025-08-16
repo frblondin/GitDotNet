@@ -4,6 +4,7 @@ using FakeItEasy;
 using FakeItEasy.Core;
 using GitDotNet.Readers;
 using GitDotNet.Tools;
+using Microsoft.Extensions.Logging;
 
 namespace GitDotNet.Tests.Helpers;
 
@@ -18,10 +19,10 @@ internal static class Fakes
             }));
 
     internal static LooseReader CreateLooseReader(string path, IFileSystem fileSystem) =>
-        A.Fake<LooseReader>(o => o.WithArgumentsForConstructor(() => new(path, fileSystem)));
+        A.Fake<LooseReader>(o => o.WithArgumentsForConstructor(() => new(path, fileSystem, null)));
 
     internal static LfsReader CreateLfsReader(string path, IFileSystem fileSystem) =>
-        A.Fake<LfsReader>(o => o.WithArgumentsForConstructor(() => new(path, fileSystem)));
+        A.Fake<LfsReader>(o => o.WithArgumentsForConstructor(() => new(path, fileSystem, null)));
 
     internal static IObjectResolver CreateObjectResolver(Func<HashId, Entry> entryProvider) =>
         A.Fake<IObjectResolver>(o => o.ConfigureFake(r =>
