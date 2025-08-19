@@ -88,7 +88,7 @@ public class GitCliCommand
             FileName = "git",
             WorkingDirectory = repository,
             Arguments = arguments,
-            CreateNoWindow = false,
+            CreateNoWindow = true,
             UseShellExecute = false,
             RedirectStandardInput = true,
             RedirectStandardError = true,

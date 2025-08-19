@@ -14,7 +14,6 @@
     <Project Path="src/tests/GitDotNet.Indexing.LiteDb.Tests/GitDotNet.Indexing.LiteDb.Tests.csproj" />
     <Project Path="src/tests/GitDotNet.Tests/GitDotNet.Tests.csproj" />
   </Folder>
-  <Project Path="src/GitDotNet.Benchmark/GitDotNet.Benchmark.csproj" />
   <Project Path="src/GitDotNet.Console/GitDotNet.Console.csproj" />
   <Project Path="src/GitDotNet.Indexing.LiteDb/GitDotNet.Indexing.LiteDb.csproj" />
   <Project Path="src/GitDotNet.Microsoft.Extensions.DependencyInjection/GitDotNet.Microsoft.Extensions.DependencyInjection.csproj" />
