@@ -26,7 +26,7 @@ InfoInput.InputData($"Enter your choice (1 to {backgroundServices.Count})", i =>
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services
     .AddLogging(config => config
-        .SetMinimumLevel(LogLevel.Debug)
+        .SetMinimumLevel(LogLevel.Warning)
         .ClearProviders()
         .AddDebug()) // Debug output windows
     .AddMemoryCache(o => o.SizeLimit = 100_000_000)
