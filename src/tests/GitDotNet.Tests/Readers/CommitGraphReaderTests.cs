@@ -16,10 +16,10 @@ public class CommitGraphReaderTests
         // Arrange
         var fileSystem = new MockFileSystem();
         fileSystem.AddFile(".git/objects/info/commit-graph", new MockFileData(Resource.CommitGraph));
-        using var sut = CommitGraphReader.Load(".git/objects",
+        using var sut = new CommitGraphReader(".git/objects",
             A.Fake<IObjectResolver>(),
             fileSystem,
-            p => fileSystem.CreateOffsetReader(p))!;
+            fileSystem.CreateOffsetReader);
 
         // Act
         var commit = sut.Get("86fe932f320a5524668a9de2023ab4860601c67f");
@@ -39,10 +39,10 @@ public class CommitGraphReaderTests
         // Arrange
         var fileSystem = new MockFileSystem();
         fileSystem.AddFile(".git/objects/info/commit-graph", new MockFileData(Resource.MergeCommitGraph));
-        using var sut = CommitGraphReader.Load(".git/objects",
-                                         A.Fake<IObjectResolver>(),
-                                         fileSystem,
-                                         p => fileSystem.CreateOffsetReader(p))!;
+        using var sut = new CommitGraphReader(".git/objects",
+            A.Fake<IObjectResolver>(),
+            fileSystem,
+            fileSystem.CreateOffsetReader);
 
         // Act
         var commit = sut.Get("2e18708dc062f5d1c9f94e82b39081f9bdc17d82");
@@ -64,10 +64,10 @@ public class CommitGraphReaderTests
         // Arrange
         var fileSystem = new MockFileSystem();
         fileSystem.AddFile(".git/objects/info/commit-graph", new MockFileData(Resource.MultiParentMergeCommitGraph));
-        using var sut = CommitGraphReader.Load(".git/objects",
-                                               A.Fake<IObjectResolver>(),
-                                               fileSystem,
-                                               p => fileSystem.CreateOffsetReader(p))!;
+        using var sut = new CommitGraphReader(".git/objects",
+            A.Fake<IObjectResolver>(),
+            fileSystem,
+            fileSystem.CreateOffsetReader);
 
         // Act
         var commit = sut.Get("36010d7f7c4503ff54ba5989cbb0404ae989b5e7");

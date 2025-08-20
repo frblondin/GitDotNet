@@ -24,53 +24,45 @@ internal partial class CommitGraphReader : IDisposable
     private readonly ILogger<CommitGraphReader>? _logger;
     private bool _disposedValue;
 
-    private CommitGraphReader(IObjectResolver objectResolver, IList<GraphFile> graphFiles, ILogger<CommitGraphReader>? logger = null)
-    {
-        _objectResolver = objectResolver;
-        _graphFiles = graphFiles;
-        _logger = logger;
-        _logger?.LogDebug("CommitGraphReader constructed with {Count} graph files", graphFiles.Count);
-    }
-
-    private int HashLength => _graphFiles.Count > 0 ? _graphFiles[0].HashLength : ObjectResolver.HashLength;
-
-    public static CommitGraphReader? Load(string path,
+    public CommitGraphReader(string path,
         IObjectResolver objectResolver,
         IFileSystem fileSystem,
         FileOffsetStreamReaderFactory offsetStreamReaderFactory,
         ILoggerFactory? loggerFactory = null)
     {
-        var logger = loggerFactory?.CreateLogger<CommitGraphReader>();
-        logger?.LogDebug("CommitGraphReader.Load called for path={Path}", path);
+        _objectResolver = objectResolver;
+        _logger = loggerFactory?.CreateLogger<CommitGraphReader>();
         var commitGraphPath = fileSystem.Path.Combine(path, "info", "commit-graph");
         var commitGraphChainPath = fileSystem.Path.Combine(path, "objects", "info", "commit-graphs", "commit-graph-chain");
 
-        IList<GraphFile> offsetStreamReaders;
         if (fileSystem.File.Exists(commitGraphChainPath))
         {
             try
             {
-                offsetStreamReaders = ReadCommitGraphChain(path, fileSystem, offsetStreamReaderFactory, commitGraphChainPath, loggerFactory);
+                _graphFiles = ReadCommitGraphChain(path, fileSystem, offsetStreamReaderFactory, commitGraphChainPath, loggerFactory);
             }
             catch (InvalidDataException ex)
             {
-                logger?.LogError(ex, "Invalid commit-graph chain file signature at {Path}", commitGraphChainPath);
+                _logger?.LogError(ex, "Invalid commit-graph chain file signature at {Path}", commitGraphChainPath);
                 throw;
             }
         }
         else if (fileSystem.File.Exists(commitGraphPath))
         {
             var commitGraphReader = offsetStreamReaderFactory(commitGraphPath);
-            offsetStreamReaders = [new GraphFile(commitGraphReader, loggerFactory?.CreateLogger<GraphFile>())];
+            _graphFiles = [new GraphFile(commitGraphReader, loggerFactory?.CreateLogger<GraphFile>())];
         }
         else
         {
-            logger?.LogWarning("No commit-graph file found at {Path}", path);
-            return null;
+            _logger?.LogWarning("No commit-graph file found at {Path}", path);
+            _graphFiles = [];
         }
-
-        return new CommitGraphReader(objectResolver, offsetStreamReaders, logger);
+        _logger?.LogDebug("CommitGraphReader constructed with {Count} graph files", _graphFiles.Count);
     }
+
+    public bool IsEmpty => _graphFiles.Count == 0;
+
+    private int HashLength => _graphFiles.Count > 0 ? _graphFiles[0].HashLength : ObjectResolver.HashLength;
 
     [ExcludeFromCodeCoverage]
     private static List<GraphFile> ReadCommitGraphChain(string path, IFileSystem fileSystem,
