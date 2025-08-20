@@ -17,7 +17,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     private readonly bool _useReadCommitGraph;
     private readonly IOptions<GitConnection.Options> _options;
     private readonly LooseReader _looseObjects;
-    private readonly Lazy<CommitGraphReader?> _commitReader;
+    private readonly Lazy<CommitGraphReader> _commitReader;
     private readonly LfsReader _lfsReader;
     private readonly IMemoryCache _memoryCache;
     private readonly ILogger<ObjectResolver>? _logger;
@@ -146,7 +146,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
 
     private async Task<TEntry?> ReadLogEntryAsync<TEntry>(HashId id, TEntry? result) where TEntry : Entry
     {
-        if (_useReadCommitGraph && _commitReader.Value is not null)
+        if (_useReadCommitGraph && !_commitReader.Value.IsEmpty)
         {
             result = (TEntry?)(object?)_commitReader.Value.Get(id);
         }

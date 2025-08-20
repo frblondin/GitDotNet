@@ -8,8 +8,9 @@ namespace GitDotNet.Readers;
 
 internal delegate PackReader PackReaderFactory(string path);
 
-internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexFactory indexFactory, ILogger<PackReader>? logger = null) : IDisposable
+internal class PackReader(string path, FileOffsetStreamReaderFactory offsetStreamReaderFactory, PackIndexFactory indexFactory, ILogger<PackReader>? logger = null) : IDisposable
 {
+    private readonly IFileOffsetStreamReader _offsetStreamReader = offsetStreamReaderFactory(path);
     private PackIndexReader? _index;
     private ConcurrentDictionary<long, Task<UnlinkedEntry>> _cache = new();
     private bool _disposedValue;
@@ -28,8 +29,8 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
     {
         if (_index == null)
         {
-            logger?.LogDebug("Loading pack index for path: {OffsetStreamReaderPath}", offsetStreamReader.Path);
-            _index = await indexFactory(Path.ChangeExtension(offsetStreamReader.Path, "idx")).ConfigureAwait(false);
+            logger?.LogDebug("Loading pack index for path: {OffsetStreamReaderPath}", _offsetStreamReader.Path);
+            _index = await indexFactory(Path.ChangeExtension(_offsetStreamReader.Path, "idx")).ConfigureAwait(false);
         }
         return _index;
     }
@@ -58,7 +59,7 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
     {
         ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(PackReader));
 
-        using var stream = offsetStreamReader.OpenRead(offset);
+        using var stream = _offsetStreamReader.OpenRead(offset);
         return await ReadAsync(stream, id, offset, dependentEntryProvider).ConfigureAwait(false);
     }
 
@@ -275,7 +276,7 @@ internal class PackReader(IFileOffsetStreamReader offsetStreamReader, PackIndexF
                 IsObsolete = true;
                 if (!_disposed.IsCancellationRequested) _disposed.Cancel();
                 _disposed.Dispose();
-                offsetStreamReader.Dispose();
+                _offsetStreamReader.Dispose();
                 logger?.LogDebug("PackReader disposed.");
             }
 

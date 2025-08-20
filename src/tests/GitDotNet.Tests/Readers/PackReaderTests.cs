@@ -89,7 +89,8 @@ public class PackReaderTests
                 A.Fake<IMemoryCache>(),
                 fileSystem,
                 null)));
-        sut = new PackReader(fileSystem.CreateOffsetReader(".git/objects/packs/data.pack"),
+        sut = new PackReader(".git/objects/packs/data.pack",
+            fileSystem.CreateOffsetReader,
             async path => await PackIndexReader.LoadAsync(path, fileSystem));
     }
 

@@ -555,8 +555,7 @@ public class GitConnectionTests
             A.CallTo(() => f.UseCommitGraph).Returns(true)));
         var graphReader = default(CommitGraphReader);
         using var objectResolver = CreateObjectResolver(id => graphReader!.Get(id)!);
-        graphReader = CommitGraphReader.Load(".git/objects", objectResolver, fileSystem,
-            p => fileSystem.CreateOffsetReader(p))!;
+        graphReader = new CommitGraphReader(".git/objects", objectResolver, fileSystem, fileSystem.CreateOffsetReader);
         using var connection = CreateProviderUsingFakeFileSystem(ref fileSystem, configReader, objectResolver).Invoke(".git");
 
         // Act

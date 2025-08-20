@@ -1,3 +1,4 @@
+using System.IO.Abstractions;
 using System.IO.MemoryMappedFiles;
 using GitDotNet.Readers;
 
@@ -12,14 +13,15 @@ internal interface IFileOffsetStreamReader : IDisposable
     Stream OpenRead(long offset);
 }
 
-internal class FileOffsetStreamReader(string path, long length) : IFileOffsetStreamReader
+internal class FileOffsetStreamReader(string path, IFileSystem fileSystem) : IFileOffsetStreamReader
 {
     private readonly MemoryMappedFile _memoryMappedFile = MemoryMappedFile.CreateFromFile(path, System.IO.FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
+    private readonly long _length = fileSystem.FileInfo.New(path).Length;
     private bool _disposedValue;
 
     public string Path { get; } = path;
 
-    public Stream OpenRead(long offset) => new SlidingMemoryMappedStream(_memoryMappedFile, offset, length);
+    public Stream OpenRead(long offset) => new SlidingMemoryMappedStream(_memoryMappedFile, offset, _length);
 
     /// <summary>Cleans up resources, optionally releasing managed resources based on the provided flag.</summary>
     /// <param name="disposing">Indicates whether to release both managed and unmanaged resources.</param>
