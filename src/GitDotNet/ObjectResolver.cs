@@ -15,7 +15,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
 {
     internal const int HashLength = 20;
     private readonly bool _useReadCommitGraph;
-    private readonly IOptions<GitConnection.Options> _options;
+    private readonly IOptions<IGitConnection.Options> _options;
     private readonly LooseReader _looseObjects;
     private readonly Lazy<CommitGraphReader> _commitReader;
     private readonly LfsReader _lfsReader;
@@ -25,7 +25,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     private bool _disposedValue;
 
     internal ObjectResolver(string repositoryPath, bool useReadCommitGraph,
-        IOptions<GitConnection.Options> options,
+        IOptions<IGitConnection.Options> options,
         PackManagerFactory packManagerFactory,
         LooseReaderFactory looseReaderFactory,
         LfsReaderFactory lfsReaderFactory,

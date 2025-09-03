@@ -24,7 +24,9 @@ public class ReadRandomBlobsBenchmark
             ManualConfig.Create(DefaultConfig.Instance)
             .AddJob(Job.Default));
         var libGit2Sharp = summary.GetActionMeanDuration<Cases>(c => c.LibGit2Sharp());
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
         var gitDotNet = summary.GetActionMeanDuration<Cases>(c => c.GitDotNet100MsCache());
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
 
         Assert.That(gitDotNet, Is.LessThan(libGit2Sharp / 10),
             "GitDotNet reading should be at least 10 times faster than LibGit2Sharp.");
@@ -34,7 +36,7 @@ public class ReadRandomBlobsBenchmark
     public class Cases
     {
         private IList<HashId>? _hashes;
-        private GitConnection? _GitDotNetNoCacheExpiration, _GitDotNet10MsCache, _GitDotNet100MsCache;
+        private IGitConnection? _GitDotNetNoCacheExpiration, _GitDotNet10MsCache, _GitDotNet100MsCache;
         private Repository? _libgit2sharp;
         private readonly Random? _random = new();
         private static readonly string _path = Path.Combine(Path.GetTempPath(), nameof(Cases));
@@ -53,7 +55,7 @@ public class ReadRandomBlobsBenchmark
             _hashes = GetBlobHashesAsync(CreateConnectionProvider()).ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
-        internal static GitConnectionProvider CreateConnectionProvider(Action<GitConnection.Options>? options = null) =>
+        internal static GitConnectionProvider CreateConnectionProvider(Action<IGitConnection.Options>? options = null) =>
             new ServiceCollection()
             .AddMemoryCache()
             .AddGitDotNet(options)

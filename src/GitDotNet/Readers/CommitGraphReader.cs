@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace GitDotNet.Readers;
 
-internal delegate CommitGraphReader? CommitGraphReaderFactory(string path, IObjectResolver objectResolver);
+internal delegate CommitGraphReader CommitGraphReaderFactory(string path, IObjectResolver objectResolver);
 
 internal partial class CommitGraphReader : IDisposable
 {

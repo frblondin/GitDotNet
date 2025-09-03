@@ -91,7 +91,7 @@ public class ConfigReader
     /// <param name="property">The property name.</param>
     /// <param name="throwIfNull">Indicates whether to throw an exception if the property is not found.</param>
     /// <returns>The property value, or null if not found and throwIfNull is false.</returns>
-    public string? GetProperty(string section, string property, bool throwIfNull = true)
+    public virtual string? GetProperty(string section, string property, bool throwIfNull = true)
     {
         if (_sections.TryGetValue(section, out var properties) && properties.TryGetValue(property, out var value))
         {
@@ -168,7 +168,7 @@ public class ConfigReader
     /// <param name="throwIfNull">Indicates whether to throw an exception if the section is not found.</param>
     /// <returns>A dictionary of properties, or null if the section is not found and throwIfNull is false.</returns>
     [ExcludeFromCodeCoverage]
-    public IImmutableDictionary<string, string>? GetSection(string section, bool throwIfNull = true)
+    public virtual IImmutableDictionary<string, string>? GetSection(string section, bool throwIfNull = true)
     {
         if (_sections.TryGetValue(section, out var properties))
         {

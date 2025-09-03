@@ -27,7 +27,9 @@ public class ArchiveBenchmark
                 .WithWarmupCount(0)
                 .WithIterationCount(2)));
         var native = summary.GetActionMeanDuration<Cases>(c => c.NativeGitArchive());
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
         var gitDotNet = summary.GetActionMeanDuration<Cases>(c => c.GitDotNet());
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
 
         Assert.That(gitDotNet, Is.LessThan(native),
             "GitDotNet archive should be faster than native git archive.");
@@ -62,7 +64,7 @@ public class ArchiveBenchmark
             await Archive(connection);
         }
 
-        private static async Task Archive(GitConnection connection)
+        private static async Task Archive(IGitConnection connection)
         {
             var zipPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.zip");
             try
@@ -83,7 +85,7 @@ public class ArchiveBenchmark
             }
         }
 
-        private static async Task ReadRepository(GitConnection connection, Channel<Task<(GitPath Path, Stream Stream)>> channel)
+        private static async Task ReadRepository(IGitConnection connection, Channel<Task<(GitPath Path, Stream Stream)>> channel)
         {
             var tip = await connection.Head.GetTipAsync().ConfigureAwait(false);
             var root = await tip.GetRootTreeAsync().ConfigureAwait(false);

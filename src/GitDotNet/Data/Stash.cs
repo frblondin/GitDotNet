@@ -5,9 +5,9 @@ namespace GitDotNet;
 /// <summary>Represents a Git stash entry.</summary>
 public class Stash : CommitEntry
 {
-    private readonly GitConnection _connection;
+    private readonly IGitConnection _connection;
 
-    internal Stash(CommitEntry commit, GitConnection connection) : base(commit.Id, commit.Data, commit.ObjectResolver, commit.RootTree)
+    internal Stash(CommitEntry commit, IGitConnection connection) : base(commit.Id, commit.Data, commit.ObjectResolver, commit.RootTree)
     {
         _connection = connection;
     }

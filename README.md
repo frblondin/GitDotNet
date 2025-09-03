@@ -5,9 +5,9 @@ It also supports writing, but it doesn't write itself: it uses git [fast-import]
 ## Features
 
 - Supports .NET 8 and 9. Note that .NET 9 is highly recommended because it uses [zlib-ng](https://github.com/zlib-ng/zlib-ng) which is much faster.
-- Read and parse Git objects (commits, trees, blobs, tags, index...) natively in .NET.
-- Write using the git [fast-import](https://git-scm.com/docs/git-fast-import) feature for high efficiency and reliability.
-- Use of memory-mapped files for high-performance .git repository data reading.
+- Reade and parses Git objects (commits, trees, blobs, tags, index...) natively in .NET, using memory-mapped files or in-memory data for high performance.
+- In-memory data uses IMemoryCache and can use max size & prioritization to control memory footprint.
+- Writes in pack files when committing large number of changes.
 - Asynchronous methods for efficient data retrieval.
 - Minimal memory footprint with lazy loading of data and usage of data streaming.
 - Comparison of git commits and trees, along with renaming detection and git patch creation.
@@ -34,7 +34,7 @@ As per high-level git features, the following is the current status of the proje
 * [x] ~~read history~~: `connection.GetLogAsync("HEAD~1", LogOptions.Default with { ... })`, `await (foreach commint in connection.Branches["fix/bug"])`
 * [x] ~~.NET native reading of objects~~: `connection.GetAsync<BlobEntry>("1aad9b571c0b84031191ab76e06fae4ba1f981bc")`
 * [x] ~~.NET native reading of `.git/index`~~: `connection.Index.GetEntriesAsync()`
-* [x] ~~writing of objects~~ (uses [fast-import](https://git-scm.com/docs/git-fast-import)): `connection.CommitAsync("main", c => c.AddOrUpdate("test.txt", Encoding.UTF8.GetBytes("foo")), connection.CreateCommit(...))`
+* [x] ~~writing of objects~~ (writes in loose of pack objects, depending on commit change count): `connection.CommitAsync("main", c => c.AddOrUpdate("test.txt", Encoding.UTF8.GetBytes("foo")), connection.CreateCommit(...))`
 * [ ] writing of `.git/index`
 * [x] ~~reading of git configuration~~: `connection.Config.GetProperty("user", "email")`
 * [ ] writing of git configuration

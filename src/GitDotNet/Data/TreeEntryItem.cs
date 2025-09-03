@@ -59,10 +59,8 @@ public sealed class TreeEntryItem : IEquatable<TreeEntryItem>
     /// <summary>Tries to get the relative path to the specified entry.</summary>
     /// <param name="entry">The entry to get the relative path to.</param>
     /// <returns>The relative path to the entry, or <see langword="null"/> if the entry was not found.</returns>
-    public async Task<GitPath?> TryGetRelativePathToAsync(Entry entry)
-    {
-        return await TryGetRelativePathToAsync(entry, new Stack<string>([Name])).ConfigureAwait(false);
-    }
+    public async Task<GitPath?> TryGetRelativePathToAsync(Entry entry) =>
+        await TryGetRelativePathToAsync(entry, new Stack<string>([Name])).ConfigureAwait(false);
 
     private async Task<GitPath?> TryGetRelativePathToAsync(Entry entry, Stack<string> path)
     {

@@ -6,7 +6,7 @@ using BlobEntryPath = (GitDotNet.GitPath Path, GitDotNet.TreeEntryItem Blob);
 
 namespace GitDotNet;
 
-internal class TreeComparer(IOptions<GitConnection.Options> options, ILogger<TreeComparer>? logger = null) : ITreeComparer
+internal class TreeComparer(IOptions<IGitConnection.Options> options, ILogger<TreeComparer>? logger = null) : ITreeComparer
 {
     public virtual async Task<IList<Change>> CompareAsync(TreeEntry? old, TreeEntry? @new)
     {
@@ -61,8 +61,8 @@ internal class TreeComparer(IOptions<GitConnection.Options> options, ILogger<Tre
     }
 
     private static void FindModifiedBlobsUsingIds(List<Change> result,
-                                                  IEnumerable<BlobEntryPath>? oldBlobs,
-                                                  IEnumerable<BlobEntryPath>? newBlobs)
+          IList<BlobEntryPath>? oldBlobs,
+          IList<BlobEntryPath>? newBlobs)
     {
         // Do non-intersection between old and new blobs, based on their ids
         var differentIds = (oldBlobs, newBlobs) switch
@@ -132,7 +132,7 @@ internal class TreeComparer(IOptions<GitConnection.Options> options, ILogger<Tre
                     // In this case, previous method should have already handled this
                     continue;
                 }
-                int i = 0;
+                int i;
 
                 // There can be more than one item with the same id but different paths
                 // We will set as renamed only the first pair of items
@@ -153,7 +153,7 @@ internal class TreeComparer(IOptions<GitConnection.Options> options, ILogger<Tre
         }
     }
 
-    private static async Task FindRenamedBlobsWithSimilarity(IOptions<GitConnection.Options> options, List<Change> result)
+    private static async Task FindRenamedBlobsWithSimilarity(IOptions<IGitConnection.Options> options, List<Change> result)
     {
         var addedItems = result.Where(c => c.Type == ChangeType.Added).ToList();
         var removedItems = result.Where(c => c.Type == ChangeType.Removed).ToList();
@@ -164,7 +164,7 @@ internal class TreeComparer(IOptions<GitConnection.Options> options, ILogger<Tre
         }
     }
 
-    private static async Task FindSimilarRenamedBlobs(IOptions<GitConnection.Options> options, List<Change> result, List<Change> addedItems, Change removedItem, IDictionary<BlobEntry, HashSet<int>> chunkCache)
+    private static async Task FindSimilarRenamedBlobs(IOptions<IGitConnection.Options> options, List<Change> result, List<Change> addedItems, Change removedItem, IDictionary<BlobEntry, HashSet<int>> chunkCache)
     {
         foreach (var addedItem in addedItems)
         {
@@ -250,7 +250,7 @@ internal class TreeComparer(IOptions<GitConnection.Options> options, ILogger<Tre
         return result;
     }
 
-    public static int ComputeHash(Span<byte> data)
+    private static int ComputeHash(Span<byte> data)
     {
         unchecked
         {
@@ -261,11 +261,11 @@ internal class TreeComparer(IOptions<GitConnection.Options> options, ILogger<Tre
 
             int hash = (int)Offset;
 
-            for (int i = 0; i < data.Length; i++)
+            foreach (var t in data)
             {
-                if (data[i] != (byte)'\r') // Ignore \r
+                if (t != (byte)'\r') // Ignore \r
                 {
-                    hash = (hash ^ data[i]) * Prime;
+                    hash = (hash ^ t) * Prime;
                 }
             }
 

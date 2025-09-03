@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using GitDotNet.Readers;
 using GitDotNet.Tools;
+using GitDotNet.Writers;
 
 namespace GitDotNet;
 
@@ -12,7 +13,7 @@ public class Branch : IAsyncEnumerable<LogEntry>, IComparable<Branch>, IEquatabl
 {
     private readonly Func<HashId> _tipProvider;
 
-    internal Branch(string canonicalName, GitConnection connection, Func<HashId> tipProvider)
+    internal Branch(string canonicalName, IGitConnection connection, Func<HashId> tipProvider)
     {
         CanonicalName = canonicalName;
         Connection = connection;
@@ -20,7 +21,7 @@ public class Branch : IAsyncEnumerable<LogEntry>, IComparable<Branch>, IEquatabl
     }
 
     [ExcludeFromCodeCoverage]
-    internal GitConnection Connection { get; }
+    internal IGitConnection Connection { get; }
 
     /// <summary>Gets the full name of the branch.</summary>
     public string CanonicalName { get; }
@@ -39,6 +40,9 @@ public class Branch : IAsyncEnumerable<LogEntry>, IComparable<Branch>, IEquatabl
 
     /// <summary>Gets the tip commit of the branch.</summary>
     public HashId? Tip => _tipProvider();
+
+    internal static string CheckFullReferenceName(string name) =>
+        !name.StartsWith("refs/") ? throw new ArgumentException("Branch should use a full reference name.", nameof(name)) : name;
 
     /// <summary>Returns an enumerator that iterates asynchronously through the commits in the branch.</summary>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the asynchronous operation.</param>
@@ -138,15 +142,14 @@ public class Branch : IAsyncEnumerable<LogEntry>, IComparable<Branch>, IEquatabl
     [DebuggerDisplay("Count = {Count}")]
     public class List : IReadOnlyCollection<Branch>
     {
-        private readonly IRepositoryInfo _info;
-        private readonly BranchRefReader _reader;
+        private readonly IBranchRefReader _reader;
+        private readonly IBranchRefWriter _writer;
         private IImmutableDictionary<string, Branch> _branches;
 
-        internal List(IRepositoryInfo info, BranchRefReader reader)
+        internal List(IBranchRefReader reader, IBranchRefWriter writer)
         {
-            _info = info;
             _reader = reader;
-
+            _writer = writer;
             _branches = ResetBranches();
         }
 
@@ -185,20 +188,20 @@ public class Branch : IAsyncEnumerable<LogEntry>, IComparable<Branch>, IEquatabl
         /// <param name="name">Specifies the branch to be removed from the repository.</param>
         /// <param name="force">Indicates whether the branch should be removed forcefully, bypassing safety checks.</param>
         [ExcludeFromCodeCoverage]
-        public void Remove(string name, bool force = false)
+        public void Delete(string name, bool force = false)
         {
-            GitCliCommand.Execute(_info.Path, $"branch {(force ? "-D" : "-d")} {name}");
+            _writer.DeleteLocalBranch(name, force);
             ResetBranches();
         }
 
         /// <summary>Creates a new branch with the specified name from a given commit reference.</summary>
         /// <param name="name">Specifies the name of the new branch to be created.</param>
-        /// <param name="committish">Indicates the commit reference from which the new branch will be created.</param>
+        /// <param name="commit">Indicates the commit reference from which the new branch will be created.</param>
         /// <param name="allowOverWrite">Determines whether to overwrite an existing branch with the same name.</param>
         /// <returns>Returns the newly created branch object.</returns>
-        public Branch Add(string name, string committish, bool allowOverWrite = false)
+        public Branch Add(string name, CommitEntry commit, bool allowOverWrite = false)
         {
-            GitCliCommand.Execute(_info.Path, $"branch {(allowOverWrite ? "--force" : "")} {name} {committish}");
+            _writer.CreateOrUpdateLocalBranch(name, commit.Id, allowOverWrite);
             ResetBranches();
             return this[name];
         }

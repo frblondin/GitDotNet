@@ -12,7 +12,7 @@ namespace GitDotNet.Indexing.Realm;
 /// <summary>Indexes the Git repository for searching.</summary>
 public partial class GitIndexing : IDisposable
 {
-    private readonly GitConnection _connection;
+    private readonly IGitConnection _connection;
     private readonly IOptions<Options> _options;
     private readonly IFileSystem _fileSystem;
     private readonly SqliteDatabaseContext _context;
@@ -22,7 +22,7 @@ public partial class GitIndexing : IDisposable
     /// <param name="connection">The connection to the Git repository.</param>
     /// <param name="options">The options for the indexing.</param>
     /// <param name="fileSystem">The file system to use.</param>
-    public GitIndexing(GitConnection connection, IOptions<Options> options, IFileSystem fileSystem)
+    public GitIndexing(IGitConnection connection, IOptions<Options> options, IFileSystem fileSystem)
     {
         _connection = connection;
         _options = options;
@@ -154,7 +154,7 @@ public partial class GitIndexing : IDisposable
         }
     }
 
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (!_disposedValue)
         {

@@ -1,22 +1,12 @@
 using System.Collections.Immutable;
 using System.Collections.Specialized;
-using System.Text;
-using System.Text.RegularExpressions;
 using GitDotNet.Tools;
 using Microsoft.Extensions.Logging;
 
 namespace GitDotNet;
 
-public partial class GitConnection
+internal partial class GitConnectionInternal
 {
-    /// <summary>
-    /// Commits staged changes asynchronously returns the resulting commit entry.
-    /// </summary>
-    /// <param name="message">The commit message describing the changes made.</param>
-    /// <param name="author">An optional signature representing the author of the commit.</param>
-    /// <param name="committer">The committer of the commit.</param>
-    /// <param name="options">The <see cref="CommitOptions"/> that specify the commit behavior.</param>
-    /// <returns>Returns a task that resolves to a CommitEntry representing the committed changes.</returns>
     public async Task<CommitEntry> CommitAsync(string message, Signature? author = null, Signature? committer = null, CommitOptions? options = null)
     {
         _logger?.LogInformation("Committing staged changes. Message: {Message}", message);
@@ -25,7 +15,7 @@ public partial class GitConnection
             _logger?.LogWarning("Cannot commit to a bare repository.");
             throw new InvalidOperationException("Cannot commit to a bare repository.");
         }
-        if (options != null && !options.UpdateBranch)
+        if (options is { UpdateBranch: false })
         {
             _logger?.LogWarning("Cannot commit without updating the branch.");
             throw new InvalidOperationException("Cannot commit without updating the branch.");
@@ -49,16 +39,7 @@ public partial class GitConnection
         }
     }
 
-
-    /// <summary>
-    /// Commits the changes in the transformation composer to the repository.
-    /// This method is usually used for bare repositories.
-    /// </summary>
-    /// <param name="branchName">The branch name to commit to.</param>
-    /// <param name="transformations">The transformations to apply to the repository.</param>
-    /// <param name="commit">The commit entry to commit.</param>
-    /// <param name="options">The <see cref="CommitOptions"/> that specify the commit behavior.</param>
-    public async Task<CommitEntry> CommitAsync(string branchName, Func<ITransformationComposer, ITransformationComposer> transformations, CommitEntry commit, CommitOptions? options = null) =>
+    public async Task<CommitEntry> CommitAsync(string branchName, Action<ITransformationComposer> transformations, CommitEntry commit, CommitOptions? options = null) =>
         await CommitAsync(branchName, c =>
         {
             _logger?.LogDebug("Applying transformations for branch: {BranchName}", branchName);
@@ -66,38 +47,41 @@ public partial class GitConnection
             return Task.FromResult(c);
         }, commit, options).ConfigureAwait(false);
 
-    /// <summary>
-    /// Commits the changes in the transformation composer to the repository.
-    /// This method is usually used for bare repositories.
-    /// </summary>
-    /// <param name="branchName">The branch name to commit to.</param>
-    /// <param name="transformations">The transformations to apply to the repository.</param>
-    /// <param name="commit">The commit entry to commit.</param>
-    /// <param name="options">The <see cref="CommitOptions"/> that specify the commit behavior.</param>
-    public async Task<CommitEntry> CommitAsync(string branchName, Func<ITransformationComposer, Task<ITransformationComposer>> transformations, CommitEntry commit, CommitOptions? options = null)
+    public async Task<CommitEntry> CommitAsync(string branchName, Func<ITransformationComposer, Task> transformations, CommitEntry commit, CommitOptions? options = null)
     {
-        if (options != null && options.AmendPreviousCommit)
+        if (options is { AmendPreviousCommit: true })
         {
             _logger?.LogWarning("Cannot amend previous commit using this method.");
             throw new InvalidOperationException("Cannot amend previous commit using this method.");
         }
-        var canonicalName = Reference.LooksLikeLocalBranch(branchName) ? branchName : $"{Reference.LocalBranchPrefix}{branchName}";
+        var canonicalName = branchName.LooksLikeLocalBranch() ? branchName : $"{Reference.LocalBranchPrefix}{branchName}";
         _logger?.LogInformation("Committing to branch: {CanonicalName}", canonicalName);
-        var composer = _transformationComposerFactory(Info.Path);
+        var composer = _transformationComposerFactory(Info);
         await transformations(composer).ConfigureAwait(false);
         var result = await composer.CommitAsync(canonicalName, commit, options).ConfigureAwait(false);
+        if (options?.UpdateBranch ?? true)
+        {
+            _logger?.LogDebug("Updating branch reference for {CanonicalName} to commit {CommitId}", canonicalName, result);
+            _branchRefWriter.CreateOrUpdateLocalBranch(canonicalName, result, allowOverwrite: true);
+        }
+        else
+        {
+            _logger?.LogDebug("Skipping branch update for {CanonicalName}. Commit: {CommitId}", canonicalName, result);
+        }
+        if (options?.UpdateHead ?? true)
+        {
+            _headWriter.UpdateHead(canonicalName);
+        }
+        else
+        {
+            _logger?.LogDebug("Skipping HEAD update for {CanonicalName}. Commit: {CommitId}", canonicalName, result);
+        }
         (Objects as IObjectResolverInternal)?.PackManager.UpdatePacks(force: true);
         var committed = await Objects.GetAsync<CommitEntry>(result!).ConfigureAwait(false);
         _logger?.LogInformation("Commit to branch {CanonicalName} completed. Commit: {CommitId}", canonicalName, committed.Id);
         return committed;
     }
 
-    /// <summary>Creates a new in-memory commit entry before it gets committed to repository.</summary>
-    /// <param name="message">The commit message.</param>
-    /// <param name="parents">The parent commits.</param>
-    /// <param name="author">The author of the commit.</param>
-    /// <param name="committer">The committer of the commit.</param>
-    /// <returns>The new commit entry.</returns>
     public CommitEntry CreateCommit(string message, IList<CommitEntry> parents, Signature? author = null, Signature? committer = null) =>
         new(HashId.Empty, [], Objects)
         {

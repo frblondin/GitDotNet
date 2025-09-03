@@ -1,38 +1,34 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using static GitDotNet.TransformationComposer;
 
 namespace GitDotNet.Writers;
 
 internal delegate FastInsertWriter FastInsertWriterFactory(Stream stream);
 
-internal sealed class FastInsertWriter : IDisposable
+[ExcludeFromCodeCoverage]
+internal sealed class FastInsertWriter(Stream stream, ILogger<FastInsertWriter>? logger = null) : IDisposable
 {
-    private readonly StreamWriter _writer;
-    private readonly ILogger<FastInsertWriter>? _logger;
-
-    public FastInsertWriter(Stream stream, ILogger<FastInsertWriter>? logger = null)
-    {
-        _writer = new StreamWriter(stream, leaveOpen: true) { NewLine = "\n" };
-        _logger = logger;
-    }
+    private readonly StreamWriter _writer = new(stream, leaveOpen: true) { NewLine = "\n" };
 
     public void WriteTransformations(TransformationComposer composer)
     {
-        _logger?.LogInformation("Writing {Count} transformations.", composer.Changes.Count);
+        logger?.LogInformation("Writing {Count} transformations.", composer.Changes.Count);
         try
         {
-            foreach (var (path, (changeType, stream, fileMode)) in composer.Changes)
+            foreach (var (path, (changeType, s, fileMode)) in composer.Changes)
             {
-                _logger?.LogDebug("Writing transformation: {ChangeType} for path {Path}", changeType, path);
-                Write(path, changeType, stream, fileMode);
+                logger?.LogDebug("Writing transformation: {ChangeType} for path {Path}", changeType, path);
+                Write(path, changeType, s, fileMode);
             }
         }
         finally
         {
-            foreach (var (_, (_, stream, _)) in composer.Changes)
+            foreach (var (_, (_, s, _)) in composer.Changes)
             {
-                stream?.Dispose();
-                _logger?.LogDebug("Disposed transformation stream.");
+                s?.Dispose();
+                logger?.LogDebug("Disposed transformation stream.");
             }
         }
     }
@@ -46,21 +42,21 @@ internal sealed class FastInsertWriter : IDisposable
 
                 if (fileMode?.Type == ObjectType.GitLink)
                 {
-                    _logger?.LogDebug("Writing GitLink add/modify for {Path}", path);
+                    logger?.LogDebug("Writing GitLink add/modify for {Path}", path);
                     WriteGitLogAddOrModified(path, stream, fileMode);
                 }
                 else
                 {
-                    _logger?.LogDebug("Writing regular blob add/modify for {Path}", path);
+                    logger?.LogDebug("Writing regular blob add/modify for {Path}", path);
                     WriteRegularBlobAddOrModified(path, stream, fileMode);
                 }
                 break;
             case TransformationComposer.TransformationType.Removed:
-                _logger?.LogDebug("Writing removal for {Path}", path);
+                logger?.LogDebug("Writing removal for {Path}", path);
                 _writer.WriteLine($"D {path}");
                 break;
             default:
-                _logger?.LogWarning("Unknown transformation type: {ChangeType} for {Path}", changeType, path);
+                logger?.LogWarning("Unknown transformation type: {ChangeType} for {Path}", changeType, path);
                 throw new ArgumentOutOfRangeException(nameof(changeType), changeType, null);
         }
     }
@@ -89,9 +85,9 @@ internal sealed class FastInsertWriter : IDisposable
 
     public async Task WriteHeaderAsync(string branch, CommitEntry commit)
     {
-        _logger?.LogInformation("Writing header for branch: {Branch}, commit: {CommitId}", branch, commit.Id);
+        logger?.LogInformation("Writing header for branch: {Branch}, commit: {CommitId}", branch, commit.Id);
         await _writer.WriteLineAsync($"commit {branch}").ConfigureAwait(false);
-        await _writer.WriteLineAsync($"mark :1").ConfigureAwait(false);
+        await _writer.WriteLineAsync("mark :1").ConfigureAwait(false);
         if (commit.Author is not null) await WriteSignatureAsync("author", commit.Author).ConfigureAwait(false);
         if (commit.Committer is not null) await WriteSignatureAsync("committer", commit.Committer).ConfigureAwait(false);
         await _writer.WriteLineAsync($"data {Encoding.UTF8.GetByteCount(commit.Message)}").ConfigureAwait(false);
@@ -120,7 +116,7 @@ internal sealed class FastInsertWriter : IDisposable
 
     public void Dispose()
     {
-        _logger?.LogDebug("Disposing FastInsertWriter.");
+        logger?.LogDebug("Disposing FastInsertWriter.");
         _writer?.Dispose();
     }
 }

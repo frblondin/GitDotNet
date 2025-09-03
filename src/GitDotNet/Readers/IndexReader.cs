@@ -11,7 +11,6 @@ internal delegate IndexReader IndexReaderFactory(string path, IObjectResolver ob
 
 internal class IndexReader(string path, IObjectResolver objectResolver, IFileSystem fileSystem, ILogger<IndexReader>? logger = null)
 {
-
     /// <summary>Gets the entries from the index file asynchronously.</summary>
     /// <returns>A task that represents the asynchronous operation. The task result contains a list of <see cref="IndexEntry"/> instances.</returns>
     public async Task<IImmutableList<IndexEntry>> GetEntriesAsync()

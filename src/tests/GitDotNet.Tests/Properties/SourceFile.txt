@@ -1,0 +1,41 @@
+namespace TestProject.Module{0}
+{
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+
+    /// <summary>
+    /// This is a generated class for testing delta compression.
+    /// Each file has similar structure but unique content.
+    /// </summary>
+    public class GeneratedClass{0}
+    {
+        private readonly string _identifier = "module_{0}";
+        private readonly int _value = {0};
+        
+        public string GetInfo()
+        {
+            return $"This is module {_identifier} with value {_value}";
+        }
+        
+        public void ProcessData()
+        {
+            var items = Enumerable.Range(1, {1}).ToList();
+            Console.WriteLine($"Processing {items.Count} items in module {0}");
+            
+            foreach (var item in items)
+            {
+                // Simulate some processing work
+                var result = item * _value + {2};
+                Console.WriteLine($"Item {item} processed: {result}");
+            }
+        }
+        
+        // Unique method for each module
+        public string GetSpecificData()
+        {
+            var data = new string('X', {3});
+            return $"{0}: {data}";
+        }
+    }
+}

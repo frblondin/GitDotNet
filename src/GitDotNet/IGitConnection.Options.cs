@@ -3,7 +3,7 @@ using Microsoft.Extensions.Primitives;
 
 namespace GitDotNet;
 
-public partial class GitConnection
+public partial interface IGitConnection
 {
     /// <summary>Provides configuration options for a Git connection.</summary>
     public class Options
@@ -37,4 +37,5 @@ public partial class GitConnection
             }
         }
     }
+
 }

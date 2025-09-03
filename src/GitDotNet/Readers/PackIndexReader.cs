@@ -132,7 +132,7 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
             for (var i = start; i < end; i++)
             {
                 await stream.ReadExactlyAsync(hashBuffer).ConfigureAwait(false);
-                CheckForHashCollision(id, alreadyFound, hashBuffer, i);
+                AmbiguousHashException.CheckForAmbiguousHashMatch(id, alreadyFound, hashBuffer, i);
             }
         }
     }
@@ -163,15 +163,6 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         }
 
         return (end, start, result);
-    }
-
-    [ExcludeFromCodeCoverage]
-    private static void CheckForHashCollision(HashId id, int alreadyFound, byte[] hashBuffer, int i)
-    {
-        if (id.CompareTo(hashBuffer.AsSpan(0, id.Hash.Count)) == 0 && i != alreadyFound)
-        {
-            throw new AmbiguousHashException();
-        }
     }
 
     public async Task<long> GetPackFileOffsetAsync(int index)

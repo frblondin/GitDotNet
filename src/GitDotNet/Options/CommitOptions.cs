@@ -10,4 +10,5 @@ namespace GitDotNet;
 /// This option bypasses the safety, and is primarily for use by foreign SCM interface scripts.
 /// </param>
 /// <param name="UpdateBranch">true to update the branch reference; otherwise, false.</param>
-public sealed record class CommitOptions(bool AmendPreviousCommit = false, bool AllowEmpty = false, bool UpdateBranch = true);
+/// <param name="UpdateHead">true to update the HEAD reference; otherwise, false.</param>
+public sealed record class CommitOptions(bool AmendPreviousCommit = false, bool AllowEmpty = false, bool UpdateBranch = true, bool UpdateHead = true);

@@ -1,18 +1,23 @@
 using System.Diagnostics;
 using System.IO.Abstractions;
 using System.Text;
-using System.Xml;
-using GitDotNet.Tools;
 using GitDotNet.Writers;
 
 namespace GitDotNet;
 
-internal delegate ITransformationComposerInternal TransformationComposerFactory(string repositoryPath);
+internal delegate ITransformationComposerInternal TransformationComposerFactory(IRepositoryInfo info);
 
 [DebuggerDisplay("Count = {Count}")]
-internal class TransformationComposer(string repositoryPath, FastInsertWriterFactory FastInsertWriterFactory, IFileSystem fileSystem)
+internal partial class TransformationComposer(IRepositoryInfo info,
+    LockWriterFactory lockWriterFactory,
+#if USE_FAST_IMPORT
+    FastInsertWriterFactory fastInsertWriterFactory,
+#endif
+    PackWriterFactory packWriterFactory, IFileSystem fileSystem)
     : ITransformationComposerInternal
 {
+    private const int LooseCommitThreshold = 100;
+
     internal Dictionary<GitPath, (TransformationType ChangeType, Stream? Stream, FileMode? FileMode)> Changes { get; } = [];
 
     public int Count => Changes.Count;
@@ -37,61 +42,28 @@ internal class TransformationComposer(string repositoryPath, FastInsertWriterFac
 
     public async Task<HashId> CommitAsync(string branch, CommitEntry commit, CommitOptions? options)
     {
-        var updateBranch = options?.UpdateBranch ?? true;
-        var importBranch = updateBranch ? CheckFullReferenceName(branch) : $"refs/gitdotnetfastimport/{Guid.NewGuid()}";
-        using var data = await WriteData(importBranch, commit).ConfigureAwait(false);
-        data.Seek(0, SeekOrigin.Begin);
-        var markFile = GetMarkDownPath(repositoryPath, fileSystem);
-        try
+        if (Changes.Count == 0 && !(options?.AllowEmpty ?? false))
         {
-            GitCliCommand.Execute(repositoryPath, $@"fast-import --export-marks=""{markFile}""", data);
-            return new HashId(FindCommitIdInMarkFile(markFile));
+            throw new InvalidOperationException("No changes to commit. Use AddOrUpdate or Remove methods to make changes before committing.");
         }
-        finally
+#if USE_FAST_IMPORT
+        return await new FastImportCommitWriter(info.Path, fastInsertWriterFactory, fileSystem).CommitAsync(this, branch, commit, options).ConfigureAwait(false);
+#else
+        var locker = lockWriterFactory(info);
+        return await locker.DoAsync(async () =>
         {
-            PostCommitCleanUp(updateBranch, importBranch, markFile);
-        }
-    }
+            Branch.CheckFullReferenceName(branch);
+            var parents = await commit.GetParentsAsync().ConfigureAwait(false);
+            var firstParent = parents.FirstOrDefault();
+            var rootTree = firstParent is not null ? await firstParent.GetRootTreeAsync().ConfigureAwait(false) : null;
 
-    private static string FindCommitIdInMarkFile(string markFile)
-    {
-        const string linePrefix = ":1 ";
-        var line = File.ReadLines(markFile)
-            .FirstOrDefault(l => l.StartsWith(linePrefix, StringComparison.Ordinal)) ??
-            throw new InvalidOperationException("Could not locate commit id in fast-import mark file.");
-        return line[linePrefix.Length..].Trim();
-    }
-
-    private void PostCommitCleanUp(bool updateBranch, string importBranch, string markFile)
-    {
-        fileSystem.File.Delete(markFile);
-        if (!updateBranch)
-        {
-            GitCliCommand.Execute(repositoryPath, $"git branch -D {importBranch}", throwOnError: false);
-        }
-    }
-
-    private static string CheckFullReferenceName(string name)
-    {
-        if (!name.StartsWith("refs/")) throw new ArgumentException("Branch should use a full reference name.", nameof(name));
-        return name;
-    }
-
-    private async Task<PooledMemoryStream> WriteData(string branch, CommitEntry commit)
-    {
-        var result = new PooledMemoryStream();
-        using var writer = FastInsertWriterFactory(result);
-        await writer.WriteHeaderAsync(branch, commit).ConfigureAwait(false);
-        writer.WriteTransformations(this);
-        return result;
-    }
-
-    private static string GetMarkDownPath(string repositoryPath, IFileSystem fileSystem)
-    {
-        var folder = fileSystem.Path.Combine(repositoryPath, "temp");
-        fileSystem.Directory.CreateDirectory(folder);
-        var markFile = fileSystem.Path.Combine(folder, fileSystem.Path.GetRandomFileName());
-        return markFile;
+            // Use loose objects for small changesets, pack files for larger ones
+            var commitWriter = Changes.Count < LooseCommitThreshold ?
+                (InternalCommitWriter)new LooseCommitWriter(this, info, fileSystem) :
+                new PackCommitWriter(this, info, packWriterFactory, fileSystem);
+            return await commitWriter.WriteAsync(rootTree, commit).ConfigureAwait(false);
+        }).ConfigureAwait(false);
+#endif
     }
 
     internal enum TransformationType
