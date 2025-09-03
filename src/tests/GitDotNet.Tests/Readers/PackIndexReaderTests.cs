@@ -37,16 +37,16 @@ public class PackIndexReaderTests
     }
 
     [Test]
-    public async Task CheckForAmbiguousHashDoesNotThrow()
+    public async Task CheckForNonAmbiguousHashDoesNotThrow()
     {
         // Arrange
         var hashId = new HashId([254, 232, 75, 85]);
 
         // Act, Assert
-        await sut.IndexOfAsync(hashId);
+        await sut.GetIndexOfAsync(hashId);
     }
 
-    private PackReader sut;
+    private PackIndexReader sut;
 
     [SetUp]
     public void Setup()
@@ -57,16 +57,18 @@ public class PackIndexReaderTests
         var objects = A.Fake<ObjectResolver>(o => o.WithArgumentsForConstructor(() =>
             new(".git", true,
                 Options.Create(new IGitConnection.Options()),
-                path => new PackManager(path, fileSystem, A.Fake<PackReaderFactory>(), null),
+                path => new PackManager(path, fileSystem, A.Fake<MultiPackIndexReaderFactory>(), A.Fake<StandardPackIndexReaderFactory>(), null),
                 path => CreateLooseReader(path, fileSystem),
                 path => CreateLfsReader(path, fileSystem),
                 (_, _) => A.Fake<CommitGraphReader>(),
                 A.Fake<IMemoryCache>(),
                 fileSystem,
                 null)));
-        sut = new PackReader(".git/objects/packs/data.pack",
+        sut = new PackIndexReader.Standard(".git/objects/packs/data.idx",
+            path => new PackReader(path, fileSystem.CreateOffsetReader),
             fileSystem.CreateOffsetReader,
-            async path => await PackIndexReader.LoadAsync(path, fileSystem));
+            fileSystem,
+            A.Fake<IMemoryCache>());
     }
 
     [TearDown]

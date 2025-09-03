@@ -8,52 +8,24 @@ namespace GitDotNet.Readers;
 
 internal delegate PackReader PackReaderFactory(string path);
 
-internal class PackReader(string path, FileOffsetStreamReaderFactory offsetStreamReaderFactory, PackIndexFactory indexFactory, ILogger<PackReader>? logger = null) : IDisposable
+internal class PackReader(string path, FileOffsetStreamReaderFactory offsetStreamReaderFactory, ILogger<PackReader>? logger = null) : IDisposable
 {
     private readonly IFileOffsetStreamReader _offsetStreamReader = offsetStreamReaderFactory(path);
-    private PackIndexReader? _index;
-    private ConcurrentDictionary<long, Task<UnlinkedEntry>> _cache = new();
+    private readonly ConcurrentDictionary<long, Task<UnlinkedEntry>> _cache = new();
     private bool _disposedValue;
     private readonly CancellationTokenSource _disposed = new();
 
-    internal bool IsObsolete { get; set; }
-
-    public async Task<int> IndexOfAsync(HashId id)
-    {
-        logger?.LogInformation("Getting index of hash: {Id}", id);
-        var indexReader = await EnsureIndex().ConfigureAwait(false);
-        return await indexReader.GetIndexOfAsync(id).ConfigureAwait(false);
-    }
-
-    private async Task<PackIndexReader> EnsureIndex()
-    {
-        if (_index == null)
-        {
-            logger?.LogDebug("Loading pack index for path: {OffsetStreamReaderPath}", _offsetStreamReader.Path);
-            _index = await indexFactory(Path.ChangeExtension(_offsetStreamReader.Path, "idx")).ConfigureAwait(false);
-        }
-        return _index;
-    }
-
-    public async Task<UnlinkedEntry> GetAsync(int indexPosition, HashId id, Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider)
-    {
-        var index = await EnsureIndex().ConfigureAwait(false);
-        var offset = await index.GetPackFileOffsetAsync(indexPosition).ConfigureAwait(false);
-
-        return await GetByOffsetAsync(offset, async () => await ReadAsync(id, offset, dependentEntryProvider).ConfigureAwait(false)).ConfigureAwait(false);
-    }
-
     private async Task<UnlinkedEntry> GetAsync(HashId id,
-                                               long offset,
-                                               Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider) =>
+        long offset,
+        Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider) =>
         await GetByOffsetAsync(offset, async () => await ReadAsync(id, offset, dependentEntryProvider).ConfigureAwait(false)).ConfigureAwait(false);
 
-    private Task<UnlinkedEntry> GetByOffsetAsync(long offset, Func<Task<UnlinkedEntry>> provider) =>
+    public Task<UnlinkedEntry> GetByOffsetAsync(long offset, Func<Task<UnlinkedEntry>> provider) =>
         _cache.TryGetValue(offset, out var result) ?
         result :
         _cache.GetOrAdd(offset, provider());
 
-    private async Task<UnlinkedEntry> ReadAsync(HashId id,
+    internal async Task<UnlinkedEntry> ReadAsync(HashId id,
                                                 long offset,
                                                 Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider)
     {
@@ -233,36 +205,6 @@ internal class PackReader(string path, FileOffsetStreamReaderFactory offsetStrea
         return result;
     }
 
-    public async Task<int> GetCountAsync()
-    {
-        ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(PackReader));
-
-        return (await EnsureIndex().ConfigureAwait(false)).Count;
-    }
-
-    internal async IAsyncEnumerable<(int Position, HashId Id)> GetHashesAsync()
-    {
-        ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(PackReader));
-
-        var index = await EnsureIndex().ConfigureAwait(false);
-        for (int i = 0; i < index.Count; i++)
-        {
-            yield return (i, await index.GetHashAsync(i).ConfigureAwait(false));
-        }
-    }
-
-    internal async IAsyncEnumerable<UnlinkedEntry> GetEntriesAsync(Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider)
-    {
-        ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(PackReader));
-
-        var index = await EnsureIndex().ConfigureAwait(false);
-        await foreach (var (position, hash) in GetHashesAsync().ConfigureAwait(false))
-        {
-            var offset = await index.GetPackFileOffsetAsync(position).ConfigureAwait(false);
-            yield return await GetAsync(hash, offset, dependentEntryProvider).ConfigureAwait(false);
-        }
-    }
-
     /// <summary>
     /// Cleans up resources used by the object, allowing for both managed and unmanaged resource disposal.
     /// </summary>
@@ -273,7 +215,6 @@ internal class PackReader(string path, FileOffsetStreamReaderFactory offsetStrea
         {
             if (disposing)
             {
-                IsObsolete = true;
                 if (!_disposed.IsCancellationRequested) _disposed.Cancel();
                 _disposed.Dispose();
                 _offsetStreamReader.Dispose();

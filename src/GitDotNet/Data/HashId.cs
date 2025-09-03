@@ -123,12 +123,12 @@ public sealed partial class HashId : IEquatable<HashId>, IComparable<HashId>, IC
     public static bool operator >=(HashId? left, HashId? right) => left is not null && right is not null && left.CompareTo(right) >= 0;
 
     /// <inheritdoc/>
-    public override string ToString() => _hashString ??= ByteArrayToHex();
+    public override string ToString() => _hashString ??= ByteArrayToHex(_hash);
 
-    private string ByteArrayToHex()
+    internal static string ByteArrayToHex(byte[] hash)
     {
-        var hex = new StringBuilder(_hash.Length * 2);
-        foreach (var b in _hash)
+        var hex = new StringBuilder(hash.Length * 2);
+        foreach (var b in hash)
         {
             hex.AppendFormat("{0:x2}", b);
         }

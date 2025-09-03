@@ -29,11 +29,42 @@ internal class FileOffsetStreamReader(string path, IFileSystem fileSystem) : IFi
     {
         if (!_disposedValue)
         {
-            if (disposing)
-            {
-                _memoryMappedFile.Dispose();
-            }
+            _memoryMappedFile?.Dispose();
+            _disposedValue = true;
+        }
+    }
 
+    public void Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    ~FileOffsetStreamReader()
+    {
+        Dispose(disposing: false);
+    }
+}
+
+internal class FileInMemoryOffsetStreamReader(string path, IFileSystem fileSystem) : IFileOffsetStreamReader
+{
+    private bool _disposedValue;
+
+    public string Path => path;
+
+    public byte[] Data { get; } = fileSystem.File.ReadAllBytes(path);
+
+    public Stream OpenRead(long offset)
+    {
+        var stream = new MemoryStream(Data, (int)offset, Data.Length - (int)offset, writable: false);
+        return stream;
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
             _disposedValue = true;
         }
     }

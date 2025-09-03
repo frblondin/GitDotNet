@@ -1124,4 +1124,25 @@ public class GitConnectionTests
         using var connection = CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git");
         connection.Should().NotBeNull();
     }
+
+    [Test]
+    public async Task ReadsMultiPackIndex()
+    {
+        // Arrange
+        var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        ZipFile.ExtractToDirectory(new MemoryStream(Resource.MultiPackRepository), folder, overwriteFiles: true);
+        using var sut = CreateProvider().Invoke(folder);
+        var objects = (ObjectResolver)sut.Objects;
+
+        // Act
+        var tip = await sut.GetCommittishAsync("master");
+
+        // Act, Assert
+        using (new AssertionScope())
+        {
+            tip.Id.ToString().Should().Be("aeaa457a27fa39a6017f6da2ca3a51b0a9c54282");
+            objects.PackManager.Indices.Should().HaveCount(1);
+            objects.PackManager.Indices.First().Should().BeOfType<PackIndexReader.MultiPack>();
+        }
+    }
 }

@@ -1,10 +1,11 @@
 using System.IO.Abstractions.TestingHelpers;
+using FakeItEasy;
 using FluentAssertions;
 using FluentAssertions.Execution;
-using GitDotNet.Writers;
 using GitDotNet.Readers;
 using GitDotNet.Tests.Helpers;
-using FakeItEasy;
+using GitDotNet.Writers;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace GitDotNet.Tests.Writers;
 
@@ -36,7 +37,7 @@ public class PackWriterTests
             _fileSystem.File.Exists(packWriter.FinalIndexPath!).Should().BeTrue("Index file should exist");
             
             // Verify pack file content using PackReader
-            await VerifyPackFileContent(packWriter.FinalPackPath!, entryId, testData);
+            await VerifyPackFileContent(packWriter.FinalIndexPath!, entryId, testData);
         }
     }
 
@@ -73,7 +74,7 @@ public class PackWriterTests
             _fileSystem.File.Exists(packWriter.FinalIndexPath!).Should().BeTrue();
             
             // Verify all entries can be read back correctly
-            await VerifyAllPackEntries(packWriter.FinalPackPath!, entries);
+            await VerifyAllPackEntries(packWriter.FinalIndexPath!, entries);
         }
     }
 
@@ -112,7 +113,7 @@ public class PackWriterTests
             _fileSystem.File.Exists(packWriter.FinalPackPath!).Should().BeTrue();
             
             // Verify content integrity despite delta compression
-            await VerifyAllPackEntries(packWriter.FinalPackPath!, entries);
+            await VerifyAllPackEntries(packWriter.FinalIndexPath!, entries);
             
             // Verify pack file is smaller due to delta compression
             var packFileSize = _fileSystem.FileInfo.New(packWriter.FinalPackPath!).Length;
@@ -153,10 +154,10 @@ public class PackWriterTests
             _fileSystem.File.Exists(packWriter.FinalPackPath!).Should().BeTrue();
             
             // Verify pack content
-            await VerifyPackEntryCount(packWriter.FinalPackPath!, entryCount);
+            VerifyPackEntryCount(packWriter.FinalIndexPath!, entryCount);
             
             // Spot check some entries
-            await VerifySpecificEntries(packWriter.FinalPackPath!, entries.Take(5));
+            await VerifySpecificEntriesAsync(packWriter.FinalIndexPath!, entries.Take(5));
         }
     }
 
@@ -183,7 +184,7 @@ public class PackWriterTests
             secondAdd.Should().BeFalse("Second add with same ID should fail");
             
             // Verify only the first data is in the pack
-            await VerifyPackFileContent(packWriter.FinalPackPath!, entryId, data1);
+            await VerifyPackFileContent(packWriter.FinalIndexPath!, entryId, data1);
         }
     }
 
@@ -221,7 +222,7 @@ public class PackWriterTests
             _fileSystem.File.Exists(packWriter.FinalPackPath!).Should().BeTrue();
             
             // Verify all entries are still accessible
-            await VerifyAllPackEntries(packWriter.FinalPackPath!, entries);
+            await VerifyAllPackEntries(packWriter.FinalIndexPath!, entries);
         }
     }
 
@@ -286,36 +287,38 @@ public class PackWriterTests
             _fileSystem.File.Exists(packWriter.FinalIndexPath!).Should().BeTrue();
             
             // Verify empty pack has correct structure
-            await VerifyPackEntryCount(packWriter.FinalPackPath!, 0);
+            VerifyPackEntryCount(packWriter.FinalIndexPath!, 0);
         }
     }
 
-    private async Task VerifyPackFileContent(string packFilePath, HashId expectedId, byte[] expectedData)
+    private async Task VerifyPackFileContent(string indexFilePath, HashId expectedId, byte[] expectedData)
     {
-        // Create PackReader to verify the written pack
-        using var packReader = new PackReader(packFilePath,
+        using var packIndexReader = new PackIndexReader.Standard(indexFilePath,
+            path => new PackReader(path, _fileSystem.CreateOffsetReader),
             _fileSystem.CreateOffsetReader,
-            async path => await PackIndexReader.LoadAsync(path, _fileSystem));
+            _fileSystem,
+            A.Fake<IMemoryCache>());
 
         // Try to find and verify the entry
-        var index = await packReader.IndexOfAsync(expectedId);
+        var index = await packIndexReader.GetIndexOfAsync(expectedId);
         index.Should().BeGreaterThanOrEqualTo(0, $"Entry {expectedId} should be found in pack");
 
-        var entry = await packReader.GetAsync(index, expectedId, _ => throw new NotSupportedException("Deltas not supported in this test"));
+        var entry = await packIndexReader.GetAsync(index, expectedId, _ => throw new NotSupportedException("Deltas not supported in this test"));
         
         entry.Type.Should().Be(EntryType.Blob);
         entry.Id.Should().Be(expectedId);
         entry.Data.Should().Equal(expectedData, "Entry data should match original");
     }
 
-    private async Task VerifyAllPackEntries(string packFilePath, List<(EntryType type, HashId id, byte[] data)> expectedEntries)
+    private async Task VerifyAllPackEntries(string indexFilePath, List<(EntryType type, HashId id, byte[] data)> expectedEntries)
     {
-        using var packReader = new PackReader(packFilePath,
+        using var packIndexReader = new PackIndexReader.Standard(indexFilePath,
+            path => new PackReader(path, _fileSystem.CreateOffsetReader),
             _fileSystem.CreateOffsetReader,
-            async path => await PackIndexReader.LoadAsync(path, _fileSystem));
+            _fileSystem,
+            A.Fake<IMemoryCache>());
 
-        var count = await packReader.GetCountAsync();
-        count.Should().Be(expectedEntries.Count, "Pack should contain all entries");
+        packIndexReader.Count.Should().Be(expectedEntries.Count, "Pack should contain all entries");
 
         // Create a cache to store resolved entries
         var resolvedEntries = new Dictionary<HashId, UnlinkedEntry>();
@@ -327,11 +330,11 @@ public class PackWriterTests
                 return cachedEntry;
 
             // Find the entry by its index and resolve it
-            var index = await packReader.IndexOfAsync(id);
+            var index = await packIndexReader.GetIndexOfAsync(id);
             if (index < 0)
                 throw new InvalidOperationException($"Dependency {id} not found in pack index");
 
-            var entry = await packReader.GetAsync(index, id, ResolveDependency);
+            var entry = await packIndexReader.GetAsync(index, id, ResolveDependency);
             resolvedEntries[id] = entry;
             return entry;
         }
@@ -346,18 +349,20 @@ public class PackWriterTests
         }
     }
 
-    private async Task VerifySpecificEntries(string packFilePath, IEnumerable<(EntryType type, HashId id, byte[] data)> entriesToCheck)
+    private async Task VerifySpecificEntriesAsync(string indexFilePath, IEnumerable<(EntryType type, HashId id, byte[] data)> entriesToCheck)
     {
-        using var packReader = new PackReader(packFilePath,
+        using var packIndexReader = new PackIndexReader.Standard(indexFilePath,
+            path => new PackReader(path, _fileSystem.CreateOffsetReader),
             _fileSystem.CreateOffsetReader,
-            async path => await PackIndexReader.LoadAsync(path, _fileSystem));
+            _fileSystem,
+            A.Fake<IMemoryCache>());
 
         foreach (var (expectedType, expectedId, expectedData) in entriesToCheck)
         {
-            var index = await packReader.IndexOfAsync(expectedId);
+            var index = await packIndexReader.GetIndexOfAsync(expectedId);
             index.Should().BeGreaterThanOrEqualTo(0, $"Entry {expectedId} should be found in pack");
 
-            var entry = await packReader.GetAsync(index, expectedId, _ => throw new NotSupportedException("Deltas not supported in this test"));
+            var entry = await packIndexReader.GetAsync(index, expectedId, _ => throw new NotSupportedException("Deltas not supported in this test"));
             
             entry.Type.Should().Be(expectedType, $"Entry {expectedId} should have correct type");
             entry.Id.Should().Be(expectedId, $"Entry {expectedId} should have correct ID");
@@ -365,14 +370,15 @@ public class PackWriterTests
         }
     }
 
-    private async Task VerifyPackEntryCount(string packFilePath, int expectedCount)
+    private void VerifyPackEntryCount(string indexFilePath, int expectedCount)
     {
-        using var packReader = new PackReader(packFilePath,
+        using var packIndexReader = new PackIndexReader.Standard(indexFilePath,
+            path => new PackReader(path, _fileSystem.CreateOffsetReader),
             _fileSystem.CreateOffsetReader,
-            async path => await PackIndexReader.LoadAsync(path, _fileSystem));
+            _fileSystem,
+            A.Fake<IMemoryCache>());
 
-        var count = await packReader.GetCountAsync();
-        count.Should().Be(expectedCount, "Pack should contain expected number of entries");
+        packIndexReader.Count.Should().Be(expectedCount, "Pack should contain expected number of entries");
     }
 
     // Test data generation methods - same pattern as PackOptimizationTests
