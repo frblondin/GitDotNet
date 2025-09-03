@@ -28,7 +28,7 @@ public sealed partial class HashId : IEquatable<HashId>, IComparable<HashId>, IC
             throw new ArgumentException("The hash must be at least 4 bytes long.", nameof(hash));
         }
         _hash = hash;
-        Hash = _hash.AsReadOnly();
+        Hash = _hash;
     }
 
     /// <summary>Initializes a new instance of the <see cref="HashId"/> class.</summary>
@@ -140,4 +140,25 @@ public sealed partial class HashId : IEquatable<HashId>, IComparable<HashId>, IC
 
     [GeneratedRegex("^[a-fA-F0-9]{64}$", RegexOptions.Compiled)]
     private static partial Regex Sha256Pattern();
+
+    /// <summary>
+    /// Creates a new <see cref="HashId"/> by computing a SHA-1 hash based on the specified entry type and data.
+    /// </summary>
+    /// <remarks>The method combines the entry type and the length of the data as a header, followed by the
+    /// data itself,  to compute the hash. The header is formatted as "<c>{type} {data.Length}\0</c>" and encoded in
+    /// ASCII.</remarks>
+    /// <param name="type">The type of the entry, which determines the prefix used in the hash computation.</param>
+    /// <param name="data">The byte array containing the data to be hashed. Must not be null.</param>
+    /// <returns>A <see cref="HashId"/> representing the computed SHA-1 hash of the entry type and data.</returns>
+    internal static HashId Create(EntryType type, byte[] data)
+    {
+        var header = $"{type.ToString().ToLowerInvariant()} {data.Length}\0";
+        var headerBytes = Encoding.ASCII.GetBytes(header);
+
+        using var sha1 = System.Security.Cryptography.SHA1.Create();
+        sha1.TransformBlock(headerBytes, 0, headerBytes.Length, null, 0);
+        sha1.TransformFinalBlock(data, 0, data.Length);
+
+        return new HashId(sha1.Hash!);
+    }
 }

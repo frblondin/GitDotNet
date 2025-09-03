@@ -43,7 +43,7 @@ public class PackReaderTests
     {
         // Act
         var objects = new ObjectResolver(".git", true,
-            Options.Create(new GitConnection.Options()),
+            Options.Create(new IGitConnection.Options()),
             path => new PackManager(path, fileSystem, _ => sut),
             path => CreateLooseReader(path, fileSystem),
             path => CreateLfsReader(path, fileSystem),
@@ -81,7 +81,7 @@ public class PackReaderTests
         fileSystem.AddFile(".git/objects/packs/data.idx", new MockFileData(Resource.PackIndex));
         var objects = A.Fake<ObjectResolver>(o => o.WithArgumentsForConstructor(() =>
             new(".git", true,
-                Options.Create(new GitConnection.Options()),
+                Options.Create(new IGitConnection.Options()),
                 path => new PackManager(path, fileSystem, A.Fake<PackReaderFactory>(), null),
                 path => CreateLooseReader(path, fileSystem),
                 path => CreateLfsReader(path, fileSystem),

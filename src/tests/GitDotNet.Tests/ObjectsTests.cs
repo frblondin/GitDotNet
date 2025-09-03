@@ -27,7 +27,7 @@ public class ObjectsTests
                  .Returns((EntryType.Blob, () => new MemoryStream([42]), 1)));
         });
         var sut = new ObjectResolver(".git", useReadCommitGraph: true,
-            options: Options.Create(new GitConnection.Options()),
+            options: Options.Create(new IGitConnection.Options()),
             packManagerFactory: Path => A.Fake<IPackManager>(),
             looseReaderFactory: _ => looseReader,
             lfsReaderFactory: path => CreateLfsReader(path, fileSystem),

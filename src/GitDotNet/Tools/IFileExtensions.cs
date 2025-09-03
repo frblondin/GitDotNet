@@ -57,4 +57,11 @@ internal static class IFileExtensions
         stream.CopyTo(ms);
         return ms.ToArray();
     }
+    
+    /// <summary>Creates a FileOffsetStreamReader for the specified path.</summary>
+    /// <param name="fileSystem">The file system to use.</param>
+    /// <param name="path">The path to the file.</param>
+    /// <returns>A new FileOffsetStreamReader instance.</returns>
+    internal static GitDotNet.Tools.IFileOffsetStreamReader CreateOffsetReader(this IFileSystem fileSystem, string path) =>
+        new GitDotNet.Tools.FileOffsetStreamReader(path, fileSystem);
 }

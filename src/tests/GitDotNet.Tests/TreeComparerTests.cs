@@ -21,7 +21,7 @@ internal class TreeComparerTests
         var @new = new TreeEntry(newTreeRoot, CreateNestedItemData("40000", "folder", newTreeItem),
             CreateObjectResolver(_ => new TreeEntry(newTreeItem, CreateNestedItemData("100644", "blob.txt", newBlob),
                 CreateObjectResolver(_ => newBlobEntry))));
-        var sut = new TreeComparer(Options.Create(new GitConnection.Options()));
+        var sut = new TreeComparer(Options.Create(new IGitConnection.Options()));
 
         // Act
         var result = await sut.CompareAsync(old, @new);
@@ -53,7 +53,7 @@ internal class TreeComparerTests
         var @new = new TreeEntry(newTreeRoot, CreateNestedItemData("40000", "folder", newTreeItem),
             CreateObjectResolver(_ => new TreeEntry(newTreeItem, [],
                 CreateObjectResolver(_ => throw new NotImplementedException()))));
-        var sut = new TreeComparer(Options.Create(new GitConnection.Options()));
+        var sut = new TreeComparer(Options.Create(new IGitConnection.Options()));
 
         // Act
         var result = await sut.CompareAsync(old, @new);
@@ -82,7 +82,7 @@ internal class TreeComparerTests
         var @new = new TreeEntry(newTreeRoot, CreateNestedItemData("40000", "folder", newTreeItem),
             CreateObjectResolver(_ => new TreeEntry(newTreeItem, CreateNestedItemData("100644", "blob.txt", newBlob),
                 CreateObjectResolver(_ => newBlobEntry))));
-        var sut = new TreeComparer(Options.Create(new GitConnection.Options()));
+        var sut = new TreeComparer(Options.Create(new IGitConnection.Options()));
 
         // Act
         var result = await sut.CompareAsync(old, @new);
@@ -116,7 +116,7 @@ internal class TreeComparerTests
         var @new = new TreeEntry(newTreeRoot, CreateNestedItemData("40000", "folder", newTreeItem),
             CreateObjectResolver(_ => new TreeEntry(newTreeItem, CreateNestedItemData("100644", "renamedBlob.txt", newBlob),
                 CreateObjectResolver(_ => newBlobEntry))));
-        var sut = new TreeComparer(Options.Create(new GitConnection.Options()));
+        var sut = new TreeComparer(Options.Create(new IGitConnection.Options()));
 
         // Act
         var result = await sut.CompareAsync(old, @new);
@@ -149,7 +149,7 @@ internal class TreeComparerTests
         var @new = new TreeEntry(newTreeRoot, CreateNestedItemData("40000", "folder", newTreeItem),
             CreateObjectResolver(_ => new TreeEntry(newTreeItem, CreateNestedItemData("100644", "renamedBlob.txt", newBlob),
                 CreateObjectResolver(_ => newBlobEntry))));
-        var sut = new TreeComparer(Options.Create(new GitConnection.Options()));
+        var sut = new TreeComparer(Options.Create(new IGitConnection.Options()));
 
         // Act
         var result = await sut.CompareAsync(old, @new);

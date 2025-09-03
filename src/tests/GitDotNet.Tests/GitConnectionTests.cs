@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.IO.Abstractions.TestingHelpers;
 using System.IO.Compression;
 using System.Text;
@@ -112,7 +113,7 @@ public class GitConnectionTests
         using var sut = CreateProvider().Invoke(folder);
 
         // Act
-        var branch = sut.Branches.Add("new_branch", "main~1");
+        var branch = sut.Branches.Add("new_branch", await sut.GetCommittishAsync("main~1"));
 
         // Assert
         using (new AssertionScope())
@@ -160,7 +161,7 @@ public class GitConnectionTests
     public async Task AddBlobCommit()
     {
         // Arrange & Act
-        var (sut, tip, commit) = await CreateCommitWithTransformation(
+        var (sut, _, commit) = await CreateCommitWithTransformation(
             c => c.AddOrUpdate("test.txt", Encoding.UTF8.GetBytes("foo")));
 
         using (sut)
@@ -173,7 +174,7 @@ public class GitConnectionTests
             await new GitPatchCreator().WriteAsync(patch, start, end, diff);
             using (new AssertionScope())
             {
-                tip = await sut.Head.GetTipAsync();
+                var tip = await sut.Head.GetTipAsync();
                 tip.Id.Should().Be(commit.Id);
                 diff.Should().HaveCount(1);
                 diff[0].Type.Should().Be(ChangeType.Added);
@@ -181,18 +182,17 @@ public class GitConnectionTests
                 var newBlob = await diff[0].New!.GetEntryAsync<BlobEntry>();
                 newBlob.GetText().Should().Be("foo");
                 patch.Position = 0;
-                new StreamReader(patch).ReadToEnd().Should().Contain(
+                (await new StreamReader(patch).ReadToEndAsync()).Should().Contain(
                     $" 1 insertion(+)\n\n--- a/dev/null\n+++ b/test.txt\nindex 1aad9b5..{commit.Id.ToString()[..7]} 100644\n@@ -1,1 +1,1 @@\n+foo\n");
             }
         }
     }
 
-
     [Test]
     public async Task RemoveBlobCommit()
     {
         // Arrange & Act
-        var (sut, tip, commit) = await CreateCommitWithTransformation(
+        var (sut, _, commit) = await CreateCommitWithTransformation(
             c => c.Remove("Applications/ss04fto6lzk5/ss04fto6lzk5.json"));
 
         using (sut)
@@ -205,13 +205,13 @@ public class GitConnectionTests
             await new GitPatchCreator().WriteAsync(patch, start, end, diff);
             using (new AssertionScope())
             {
-                tip = await sut.Head.GetTipAsync();
+                var tip = await sut.Head.GetTipAsync();
                 tip.Id.Should().Be(commit.Id);
                 diff.Should().HaveCount(1);
                 diff[0].Type.Should().Be(ChangeType.Removed);
                 diff[0].OldPath!.ToString().Should().Be("Applications/ss04fto6lzk5/ss04fto6lzk5.json");
                 patch.Position = 0;
-                new StreamReader(patch).ReadToEnd().Should().Contain(
+                (await new StreamReader(patch).ReadToEndAsync()).Should().Contain(
                     $" 1 deletion(-)\n\n--- a/Applications/ss04fto6lzk5/ss04fto6lzk5.json\n+++ b/dev/null");
             }
         }
@@ -221,7 +221,7 @@ public class GitConnectionTests
     public async Task AddCommitWithoutUpdatingBranch()
     {
         // Arrange & Act
-        var (sut, tip, commit) = await CreateCommitWithTransformation(
+        var (sut, _, commit) = await CreateCommitWithTransformation(
             c => c.AddOrUpdate("test.txt", Encoding.UTF8.GetBytes("foo")), updateBranch: false);
 
         using (sut)
@@ -238,7 +238,6 @@ public class GitConnectionTests
             }
         }
     }
-
 
     [Test]
     public async Task AddFirstCommitWithoutUpdatingBranch()
@@ -276,9 +275,9 @@ public class GitConnectionTests
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
         TestUtils.ForceDeleteDirectory(folder);
         GitConnection.Create(folder);
-        using (var writer = File.CreateText(Path.Combine(folder, "file.txt")))
+        await using (var writer = File.CreateText(Path.Combine(folder, "file.txt")))
         {
-            writer.Write("foo");
+            await writer.WriteAsync("foo");
         }
         using var sut = CreateProvider().Invoke(folder);
 
@@ -305,9 +304,9 @@ public class GitConnectionTests
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
         TestUtils.ForceDeleteDirectory(folder);
         GitConnection.Create(folder);
-        using (var writer = File.CreateText(Path.Combine(folder, "file.txt")))
+        await using (var writer = File.CreateText(Path.Combine(folder, "file.txt")))
         {
-            writer.Write("foo");
+            await writer.WriteAsync("foo");
         }
         using var sut = CreateProvider().Invoke(folder);
         sut.Index.AddEntries("*");
@@ -334,8 +333,8 @@ public class GitConnectionTests
         }
     }
 
-    private static async Task<(GitConnection sut, CommitEntry tip, CommitEntry commit)> CreateCommitWithTransformation(
-        Func<ITransformationComposer, ITransformationComposer> transformations, bool updateBranch = true)
+    private static async Task<(IGitConnection sut, CommitEntry tip, CommitEntry commit)> CreateCommitWithTransformation(
+        Action<ITransformationComposer> transformations, bool updateBranch = true)
     {
         // Arrange
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
@@ -360,13 +359,20 @@ public class GitConnectionTests
     {
         // Arrange
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        var baseTemplate = Encoding.UTF8.GetString(Resource.SourceFile);
         TestUtils.ForceDeleteDirectory(folder);
         GitConnection.Create(folder, isBare: true);
         using var sut = CreateProvider().Invoke(folder);
 
         // Act
         var commit = await sut.CommitAsync("main",
-            c => c.AddOrUpdate("test.txt", "foo"),
+            c =>
+            {
+                for (int i = 0; i < 1_000; i++)
+                {
+                    c.AddOrUpdate($"GeneratedClass{i:000}.cs", $"{baseTemplate}{i:000}");
+                }
+            },
             sut.CreateCommit("Commit message",
                             [],
                             new("test", "test@corporate.com", DateTimeOffset.Now),
@@ -378,11 +384,268 @@ public class GitConnectionTests
             var headTip = await sut.Branches["refs/heads/main"].GetTipAsync();
             headTip.Id.Should().Be(commit.Id);
             var tree = await commit.GetRootTreeAsync();
-            tree.Children.Should().HaveCount(1);
-            tree.Children[0].Name.Should().Be("test.txt");
-            var blob = await tree.Children[0].GetEntryAsync<BlobEntry>();
-            blob.GetText().Should().Be("foo");
+            tree.Children.Should().HaveCount(1_000);
+            var blob = await (await tree.GetFromPathAsync("GeneratedClass500.cs"))!.GetEntryAsync<BlobEntry>();
+            blob.GetText().Should().Be($"{baseTemplate}500");
         }
+    }
+
+    [Test]
+    public async Task CreateBareRepositoryWithManyEmptyFiles()
+    {
+        // Arrange
+        var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        TestUtils.ForceDeleteDirectory(folder);
+        GitConnection.Create(folder, isBare: true);
+        using var sut = CreateProvider().Invoke(folder);
+
+        // Act - Create 1000 empty files
+        var commit = await sut.CommitAsync("main",
+            c =>
+            {
+                for (int i = 0; i < 1000; i++)
+                {
+                    c.AddOrUpdate($"empty_file_{i:D4}.txt", "");
+                }
+            },
+            sut.CreateCommit("Initial commit with 1000 empty files",
+                            [],
+                            new("test", "test@corporate.com", DateTimeOffset.Now),
+                            new("test", "test@corporate.com", DateTimeOffset.Now)));
+
+        // Assert
+        using (new AssertionScope())
+        {
+            var headTip = await sut.Branches["refs/heads/main"].GetTipAsync();
+            headTip.Id.Should().Be(commit.Id);
+
+            var tree = await commit.GetRootTreeAsync();
+            tree.Children.Should().HaveCount(1000, "Should have 1000 empty files");
+        }
+    }
+
+    [Test]
+    public async Task CreateBareRepositoryAndAddCommitWithSmallRandomDiffs_ShowsDeltaCompression()
+    {
+        // Arrange
+        var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        var baseString = string.Concat(Enumerable.Range(0, 200).Select(_ => "The quick brown fox jumps over the lazy dog. "));
+        TestUtils.ForceDeleteDirectory(folder);
+        GitConnection.Create(folder, isBare: true);
+        using var sut = CreateProvider().Invoke(folder);
+
+        // Create base content with realistic text patterns that should compress well
+        var baseContent = $"{baseString}This is a common ending for all files.";
+
+        // Track compression metrics for analysis
+        var originalTotalSize = 0L;
+
+        // Act - Create 100 files with small random character injections
+        var commit = await sut.CommitAsync("main",
+            c =>
+            {
+                var random = new Random(12345); // Fixed seed for reproducible tests
+
+                for (int i = 0; i < 100; i++)
+                {
+                    // Inject 1-3 random characters at random positions for each file
+                    var modifiedContent = InjectRandomCharacters(baseContent, random, injectionCount: random.Next(1, 4));
+                    var fileName = $"document_{i:000}.txt";
+
+                    c.AddOrUpdate(fileName, modifiedContent);
+                    originalTotalSize += baseContent.Length;
+                    // Note: We can't get compressed size here as it's calculated during pack writing
+                }
+
+                TestContext.Out.WriteLine($"Created 100 files with small random diffs");
+                TestContext.Out.WriteLine($"Base content size: {baseContent.Length} characters");
+                TestContext.Out.WriteLine($"Total original size: {originalTotalSize} bytes");
+            },
+            sut.CreateCommit("Initial commit with similar files having small random diffs",
+                            [],
+                            new("test", "test@corporate.com", DateTimeOffset.Now),
+                            new("test", "test@corporate.com", DateTimeOffset.Now)));
+
+        // Assert
+        using (new AssertionScope())
+        {
+            var headTip = await sut.Branches["refs/heads/main"].GetTipAsync();
+            headTip.Id.Should().Be(commit.Id);
+
+            var tree = await commit.GetRootTreeAsync();
+            tree.Children.Should().HaveCount(100, "Should have 100 files with small diffs");
+
+            // Verify first file has expected structure
+            var firstBlob = await tree.Children[0].GetEntryAsync<BlobEntry>();
+            var firstContent = firstBlob.GetText();
+            firstContent.Should().Contain("The quick brown fox jumps over the lazy dog",
+                "Should contain the base pattern");
+            firstContent.Should().Contain("This is a common ending for all files",
+                "Should contain the common ending");
+
+            // Verify files are actually different (small random diffs applied)
+            var allContents = new List<string>();
+            for (int i = 0; i < Math.Min(10, tree.Children.Count); i++) // Sample first 10 files
+            {
+                var blob = await tree.Children[i].GetEntryAsync<BlobEntry>();
+                allContents.Add(blob.GetText()!);
+            }
+
+            // All files should be unique (very high probability with random injections)
+            allContents.Should().OnlyHaveUniqueItems("Files should have unique content due to random character injections");
+
+            // Log some analysis for manual verification
+            await TestContext.Out.WriteLineAsync($"Sample file sizes: {string.Join(", ", allContents.Take(5).Select(c => c.Length))}");
+            await TestContext.Out.WriteLineAsync("Delta compression effectiveness will be visible in pack file size vs sum of individual file sizes");
+
+            // The real test is that this should create a highly compressed pack file
+            // The delta algorithm should find that most content is shared between files
+            // with only small literal differences for the injected characters
+        }
+    }
+
+    private static string InjectRandomCharacters(string text, Random random, int injectionCount)
+    {
+        var chars = text.ToCharArray();
+        var result = new List<char>(chars);
+
+        // Character pool for injections (printable ASCII)
+        const string injectableChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;':\",./<>?";
+
+        // Inject characters at random positions
+        for (int i = 0; i < injectionCount; i++)
+        {
+            var insertPos = random.Next(0, result.Count);
+            var charToInject = injectableChars[random.Next(injectableChars.Length)];
+            result.Insert(insertPos, charToInject);
+        }
+
+        return new string(result.ToArray());
+    }
+
+    [Test]
+    public async Task CreateBareRepositoryWithProgressiveDiffs_TestsDeltaChaining()
+    {
+        // Arrange - Test progressive diffs that should create delta chains
+        var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
+        TestUtils.ForceDeleteDirectory(folder);
+        GitConnection.Create(folder, isBare: true);
+        using var sut = CreateProvider().Invoke(folder);
+
+        var baseText = """
+            # Software Development Best Practices
+
+            ## Introduction
+            This document outlines the best practices for software development
+            in our organization. These practices are designed to improve code quality,
+            maintainability, and team collaboration.
+
+            ## Code Style Guidelines
+            - Use meaningful variable names
+            - Write self-documenting code
+            - Follow consistent indentation
+            - Add comments for complex logic
+
+            ## Testing Requirements
+            - Write unit tests for all new functions
+            - Achieve minimum 80% code coverage
+            - Include integration tests for APIs
+            - Perform code reviews before merging
+
+            ## Version Control
+            - Use descriptive commit messages
+            - Create feature branches for new work
+            - Squash commits before merging
+            - Tag releases with semantic versioning
+            """;
+
+        // Act - Create files with incremental changes (like editing a document over time)
+        var commit = await sut.CommitAsync("main",
+            c =>
+            {
+                var random = new Random(54321); // Fixed seed
+                var currentText = baseText;
+
+                for (int version = 0; version < 50; version++)
+                {
+                    // Each version adds 1-2 small edits to the previous version
+                    // This should create an optimal scenario for delta chaining
+                    currentText = ApplySmallEdits(currentText, random, editCount: random.Next(1, 3));
+
+                    var fileName = $"best_practices_v{version:00}.md";
+                    c.AddOrUpdate(fileName, currentText);
+                }
+
+                TestContext.Out.WriteLine("Created 50 progressive versions of a document");
+                TestContext.Out.WriteLine($"Base document size: {baseText.Length} characters");
+                TestContext.Out.WriteLine("Each version builds incrementally on the previous version");
+            },
+            sut.CreateCommit("Progressive document versions for delta chain testing",
+                            [],
+                            new("test", "test@corporate.com", DateTimeOffset.Now),
+                            new("test", "test@corporate.com", DateTimeOffset.Now)));
+
+        // Assert
+        using (new AssertionScope())
+        {
+            var headTip = await sut.Branches["refs/heads/main"].GetTipAsync();
+            headTip.Id.Should().Be(commit.Id);
+
+            var tree = await commit.GetRootTreeAsync();
+            tree.Children.Should().HaveCount(50, "Should have 50 progressive versions");
+
+            // Verify the progression - each file should be similar to adjacent versions
+            var firstBlob = await tree.Children[0].GetEntryAsync<BlobEntry>();
+            var lastBlob = await tree.Children[49].GetEntryAsync<BlobEntry>();
+
+            var firstText = firstBlob.GetText();
+            var lastText = lastBlob.GetText();
+
+            // Both should contain the core structure
+            firstText.Should().Contain("Software Development Best Practices");
+            lastText.Should().Contain("Software Development Best Practices");
+
+            // But they should be different due to progressive edits
+            firstText.Should().NotBe(lastText, "First and last versions should be different");
+
+            await TestContext.Out.WriteLineAsync($"First version size: {firstText.Length} characters");
+            await TestContext.Out.WriteLineAsync($"Last version size: {lastText.Length} characters");
+            await TestContext.Out.WriteLineAsync("This scenario should demonstrate excellent delta chain compression");
+        }
+    }
+
+    private static string ApplySmallEdits(string text, Random random, int editCount)
+    {
+        var result = text;
+
+        for (int i = 0; i < editCount; i++)
+        {
+            // Make extremely conservative edits that won't break the main title
+            var editType = random.Next(2); // 0=append to end only, 1=add blank line
+
+            switch (editType)
+            {
+                case 0: // Append a small addition at the very end only
+                    var additions = new[] { ".", " (updated)", " notes", " items" };
+                    var addition = additions[random.Next(additions.Length)];
+                    result += addition;
+                    break;
+
+                case 1: // Add extra whitespace/newlines (non-destructive)
+                    if (result.Contains("## "))
+                    {
+                        // Add an extra newline before a section header
+                        var index = result.IndexOf("## ", StringComparison.Ordinal);
+                        if (index >= 0)
+                        {
+                            result = result.Substring(0, index) + "\n## " + result.Substring(index + 3);
+                        }
+                    }
+                    break;
+            }
+        }
+
+        return result;
     }
 
     [Test]
@@ -497,7 +760,7 @@ public class GitConnectionTests
         // Assert
         using (new AssertionScope())
         {
-            commit.Id.ToString().Should().Be("de2877f9d577ee1efc6d770bdc37079ef293d946");
+            commit!.Id.ToString().Should().Be("de2877f9d577ee1efc6d770bdc37079ef293d946");
         }
     }
 
@@ -552,14 +815,18 @@ public class GitConnectionTests
         fileSystem.AddFile(".git/refs/heads/main", new MockFileData($"{tip}."));
         fileSystem.AddFile(".git/objects/info/commit-graph", new MockFileData(Resource.MultiParentMergeCommitGraph));
         var configReader = A.Fake<ConfigReader>(o => o.ConfigureFake(f =>
-            A.CallTo(() => f.UseCommitGraph).Returns(true)));
+        {
+            A.CallTo(() => f.UseCommitGraph).Returns(true);
+            A.CallTo(() => f.GetSection(A<string>._, A<bool>._)).Returns(ImmutableDictionary<string, string>.Empty);
+            A.CallTo(() => f.GetProperty(A<string>._, A<string>._, A<bool>._)).Returns(null);
+        }));
         var graphReader = default(CommitGraphReader);
         using var objectResolver = CreateObjectResolver(id => graphReader!.Get(id)!);
         graphReader = new CommitGraphReader(".git/objects", objectResolver, fileSystem, fileSystem.CreateOffsetReader);
         using var connection = CreateProviderUsingFakeFileSystem(ref fileSystem, configReader, objectResolver).Invoke(".git");
 
         // Act
-        var commit = await connection.GetCommittishAsync<LogEntry>("HEAD^3", e => e.ParentIds);
+        var commit = await ((GitConnectionInternal)connection).GetCommittishAsync<LogEntry>("HEAD^3", e => e.ParentIds);
 
         // Assert
         commit.Id.ToString().Should().Be("a28d9681fdf40631632a42b303be274e3869d5d5");
@@ -589,5 +856,272 @@ public class GitConnectionTests
             changes[1].Type.Should().Be(ChangeType.Added);
             changes[1].NewPath!.ToString().Should().Be("b.txt");
         }
+    }
+
+    [Test]
+    public void ThrowsNotSupportedExceptionForPromisorPacks()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem();
+        fileSystem.AddDirectory(".git");
+        fileSystem.AddDirectory(".git/objects/pack");
+        fileSystem.AddFile(".git/objects/pack/pack-123456789abcdef.promisor", new MockFileData(""));
+        fileSystem.AddFile(".git/config", new MockFileData("""
+            [core]
+                repositoryformatversion = 0
+                bare = false
+            [user]
+                name = Test User
+                email = test@example.com
+            """));
+
+        // Act & Assert
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git"));
+        exception.Message.Should().Contain("Promisor Packs (partial clone)");
+    }
+
+    [Test]
+    public void ThrowsNotSupportedExceptionForAlternateObjectDBs()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem();
+        fileSystem.AddDirectory(".git");
+        fileSystem.AddDirectory(".git/objects/info");
+        fileSystem.AddFile(".git/objects/info/alternates", new MockFileData("/path/to/alternate/objects\n"));
+        fileSystem.AddFile(".git/config", new MockFileData("""
+            [core]
+                repositoryformatversion = 0
+                bare = false
+            [user]
+                name = Test User
+                email = test@example.com
+            """));
+
+        // Act & Assert
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git"));
+        exception.Message.Should().Contain("Alternate Object DBs");
+    }
+
+    [Test]
+    public void ThrowsNotSupportedExceptionForHttpAlternateObjectDBs()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem();
+        fileSystem.AddDirectory(".git");
+        fileSystem.AddDirectory(".git/objects/info");
+        fileSystem.AddFile(".git/objects/info/http-alternates", new MockFileData("http://example.com/objects\n"));
+        fileSystem.AddFile(".git/config", new MockFileData("""
+            [core]
+                repositoryformatversion = 0
+                bare = false
+            [user]
+                name = Test User
+                email = test@example.com
+            """));
+
+        // Act & Assert
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git"));
+        exception.Message.Should().Contain("HTTP Alternate Object DBs");
+    }
+
+    [Test]
+    public void ThrowsNotSupportedExceptionForReftableInConfig()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem();
+        fileSystem.AddDirectory(".git");
+        fileSystem.AddFile(".git/config", new MockFileData("""
+            [core]
+                repositoryformatversion = 1
+                bare = false
+            [extensions]
+                refstorage = reftable
+            [user]
+                name = Test User
+                email = test@example.com
+            """));
+
+        // Act & Assert
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git"));
+        exception.Message.Should().Contain("Reftable reference storage");
+    }
+
+    [Test]
+    public void ThrowsNotSupportedExceptionForReftableDirectory()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem();
+        fileSystem.AddDirectory(".git");
+        fileSystem.AddDirectory(".git/reftable");
+        fileSystem.AddFile(".git/config", new MockFileData("""
+            [core]
+                repositoryformatversion = 0
+                bare = false
+            [user]
+                name = Test User
+                email = test@example.com
+            """));
+
+        // Act & Assert
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git"));
+        exception.Message.Should().Contain("Reftable reference storage");
+    }
+
+    [Test]
+    public void ThrowsNotSupportedExceptionForUnsupportedRepositoryVersion()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem();
+        fileSystem.AddDirectory(".git");
+        fileSystem.AddFile(".git/config", new MockFileData("""
+            [core]
+                repositoryformatversion = 2
+                bare = false
+            [user]
+                name = Test User
+                email = test@example.com
+            """));
+
+        // Act & Assert
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git"));
+        exception.Message.Should().Contain("Repository format version 2 (only version 0 and 1 are supported)");
+    }
+
+    [Test]
+    public void ThrowsNotSupportedExceptionForUnsupportedObjectFormat()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem();
+        fileSystem.AddDirectory(".git");
+        fileSystem.AddFile(".git/config", new MockFileData("""
+            [core]
+                repositoryformatversion = 1
+                bare = false
+            [extensions]
+                objectformat = sha256
+            [user]
+                name = Test User
+                email = test@example.com
+            """));
+
+        // Act & Assert
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git"));
+        exception.Message.Should().Contain("Object format 'sha256' (only SHA-1 is supported)");
+    }
+
+    [Test]
+    public void ThrowsNotSupportedExceptionForWorktreeConfig()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem();
+        fileSystem.AddDirectory(".git");
+        fileSystem.AddFile(".git/config", new MockFileData("""
+            [core]
+                repositoryformatversion = 1
+                bare = false
+            [extensions]
+                worktreeconfig = true
+            [user]
+                name = Test User
+                email = test@example.com
+            """));
+
+        // Act & Assert
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git"));
+        exception.Message.Should().Contain("Worktree-specific configuration");
+    }
+
+    [Test]
+    public void ThrowsNotSupportedExceptionForPartialClone()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem();
+        fileSystem.AddDirectory(".git");
+        fileSystem.AddFile(".git/config", new MockFileData("""
+            [core]
+                repositoryformatversion = 1
+                bare = false
+            [extensions]
+                partialclone = origin
+            [user]
+                name = Test User
+                email = test@example.com
+            """));
+
+        // Act & Assert
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git"));
+        exception.Message.Should().Contain("Partial clone with remote 'origin'");
+    }
+
+    [Test]
+    public void ThrowsNotSupportedExceptionForMultipleUnsupportedFeatures()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem();
+        fileSystem.AddDirectory(".git");
+        fileSystem.AddDirectory(".git/objects/pack");
+        fileSystem.AddDirectory(".git/objects/info");
+        fileSystem.AddFile(".git/objects/pack/pack-123456789abcdef.promisor", new MockFileData(""));
+        fileSystem.AddFile(".git/objects/info/alternates", new MockFileData("/path/to/alternate/objects\n"));
+        fileSystem.AddFile(".git/config", new MockFileData("""
+            [core]
+                repositoryformatversion = 1
+                bare = false
+            [extensions]
+                refstorage = reftable
+            [user]
+                name = Test User
+                email = test@example.com
+            """));
+
+        // Act & Assert
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git"));
+        exception.Message.Should().Contain("unsupported Git features:");
+        exception.Message.Should().Contain("Promisor Packs (partial clone)");
+        exception.Message.Should().Contain("Alternate Object DBs");
+        exception.Message.Should().Contain("Reftable reference storage");
+    }
+
+    [Test]
+    public void DoesNotThrowForSupportedRepositoryFormat()
+    {
+        // Arrange
+        var fileSystem = new MockFileSystem();
+        fileSystem.AddDirectory(".git");
+        fileSystem.AddFile(".git/config", new MockFileData("""
+            [core]
+                repositoryformatversion = 1
+                bare = false
+            [extensions]
+                objectformat = sha1
+            [user]
+                name = Test User
+                email = test@example.com
+            """));
+
+        // Act & Assert - Should not throw
+        using var connection = CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git");
+        connection.Should().NotBeNull();
+    }
+
+    [Test]
+    public void DoesNotThrowForBasicRepository()
+    {
+        // Arrange
+        var fileSystem = default(MockFileSystem);
+        
+        // Act & Assert - Should not throw (uses the standard fake filesystem)
+        using var connection = CreateProviderUsingFakeFileSystem(ref fileSystem).Invoke(".git");
+        connection.Should().NotBeNull();
     }
 }

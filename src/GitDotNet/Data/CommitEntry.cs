@@ -92,7 +92,7 @@ public class CommitEntry : Entry
 
         while (lines.Length > 0)
         {
-            var lineEndIndex = lines.IndexOfAny('\r', '\n');
+            var lineEndIndex = lines.IndexOf('\n');
             ReadOnlySpan<char> line;
 
             if (lineEndIndex == -1)

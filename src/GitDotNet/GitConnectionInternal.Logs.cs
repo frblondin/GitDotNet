@@ -4,13 +4,8 @@ using Microsoft.Extensions.Logging;
 
 namespace GitDotNet;
 
-public partial class GitConnection
+internal partial class GitConnectionInternal
 {
-    /// <summary>Gets the log of commits from the specified reference.</summary>
-    /// <param name="committish">The reference to start from.</param>
-    /// <param name="options">The options for the log.</param>
-    /// <param name="token">The cancellation token.</param>
-    /// <returns>An asynchronous enumerable of commit entries.</returns>
     public IAsyncEnumerable<LogEntry> GetLogAsync(string committish, LogOptions? options = null,
         CancellationToken token = default)
     {
@@ -75,44 +70,42 @@ public partial class GitConnection
     private async Task<(Continuation, GitPath? EntryPath, HashId? LastEntryId)> CheckContinuationAsync(GitPath? entryPath, HashId? lastEntryId, LogEntry currentCommit, LogEntry previousCommit)
     {
         var result = Continuation.Continue;
-        if (entryPath is not null)
+        if (entryPath is null)
         {
-            var currentRoot = await currentCommit.GetRootTreeAsync().ConfigureAwait(false);
-            var entry = await currentRoot.GetFromPathAsync(entryPath!).ConfigureAwait(false);
-            if (entry is null)
+            return (result, entryPath, lastEntryId);
+        }
+
+        var currentRoot = await currentCommit.GetRootTreeAsync().ConfigureAwait(false);
+        var entry = await currentRoot.GetFromPathAsync(entryPath!).ConfigureAwait(false);
+        if (entry is null)
+        {
+            var diff = await CompareAsync(
+                await previousCommit.GetCommitAsync().ConfigureAwait(false),
+                await currentCommit.GetCommitAsync().ConfigureAwait(false)).ConfigureAwait(false);
+            var renamed = diff.FirstOrDefault(c => c.Type == ChangeType.Renamed && c.OldPath!.Equals(entryPath));
+            if (renamed is not null)
             {
-                var diff = await CompareAsync(
-                    await previousCommit.GetCommitAsync().ConfigureAwait(false),
-                    await currentCommit.GetCommitAsync().ConfigureAwait(false)).ConfigureAwait(false);
-                var renamed = diff.FirstOrDefault(c => c.Type == ChangeType.Renamed && c.OldPath!.Equals(entryPath));
-                if (renamed is not null)
-                {
-                    entryPath = renamed.NewPath!;
-                    _logger?.LogInformation("Entry path renamed from {OldPath} to {NewPath}", entryPath, renamed.NewPath);
-                }
-                else
-                {
-                    result = Continuation.Break;
-                    _logger?.LogInformation("Entry path {EntryPath} deleted at commit: {CommitId}", entryPath, currentCommit.CommitId);
-                }
-            }
-            else if (entry.Id.Equals(lastEntryId))
-            {
-                result = Continuation.Skip;
-                _logger?.LogDebug("Entry {EntryPath} unchanged in commit: {CommitId}", entryPath, currentCommit.CommitId);
+                entryPath = renamed.NewPath!;
+                _logger?.LogInformation("Entry path renamed from {OldPath} to {NewPath}", entryPath, renamed.NewPath);
             }
             else
             {
-                lastEntryId = entry.Id;
+                result = Continuation.Break;
+                _logger?.LogInformation("Entry path {EntryPath} deleted at commit: {CommitId}", entryPath, currentCommit.CommitId);
             }
+        }
+        else if (entry.Id.Equals(lastEntryId))
+        {
+            result = Continuation.Skip;
+            _logger?.LogDebug("Entry {EntryPath} unchanged in commit: {CommitId}", entryPath, currentCommit.CommitId);
+        }
+        else
+        {
+            lastEntryId = entry.Id;
         }
         return (result, entryPath, lastEntryId);
     }
 
-    /// <summary>Retrieves the merge base commit between two specified commits asynchronously.</summary>
-    /// <param name="committish1">The identifier of the first commit to compare for the merge base.</param>
-    /// <param name="committish2">The commit entry of the second commit used in the comparison.</param>
-    /// <returns>Returns the merge base commit entry or null if no merge base exists.</returns>
     public async Task<CommitEntry?> GetMergeBaseAsync(string committish1, string committish2)
     {
         _logger?.LogInformation("Finding merge base between {Committish1} and {Committish2}", committish1, committish2);

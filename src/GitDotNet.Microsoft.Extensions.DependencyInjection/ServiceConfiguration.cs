@@ -12,10 +12,10 @@ public static class ServiceConfiguration
 {
     /// <summary>Adds access to GitObjectDb repositories.</summary>
     /// <param name="source">The source.</param>
-    /// <param name="configure">A delegate to configure the <see cref="GitConnection.Options"/>.</param>
+    /// <param name="configure">A delegate to configure the <see cref="IGitConnection.Options"/>.</param>
     /// <returns>The source <see cref="IServiceCollection"/>.</returns>
     public static IServiceCollection AddGitDotNet(this IServiceCollection source,
-        Action<GitConnection.Options>? configure = null)
+        Action<IGitConnection.Options>? configure = null)
     {
         if (configure != null)
         {
@@ -27,7 +27,7 @@ public static class ServiceConfiguration
             .AddSingleton<IFileSystem, FileSystem>()
             // Options
             .AddOptions()
-            .AddSingleton(sp => { var options = new GitConnection.Options(); configure?.Invoke(options); return options; })
+            .AddSingleton(sp => { var options = new IGitConnection.Options(); configure?.Invoke(options); return options; })
             .AddMain()
             .AddReaders()
             .AddWriters();
@@ -36,7 +36,7 @@ public static class ServiceConfiguration
     private static IServiceCollection AddMain(this IServiceCollection services) => services
         .AddScoped<GitCliCommand>()
         .AddAutoFactory<RepositoryInfoFactory>(ServiceLifetime.Scoped)
-        .AddAutoFactory<GitConnectionProvider>(ServiceLifetime.Scoped)
+        .AddAutoFactory<GitConnectionProvider, GitConnectionInternal>(ServiceLifetime.Scoped)
         .AddAutoFactory<ConfigReaderFactory>(ServiceLifetime.Scoped);
 
     private static IServiceCollection AddReaders(this IServiceCollection services) => services
@@ -47,7 +47,7 @@ public static class ServiceConfiguration
         .AddAutoFactory<IndexReaderFactory>(ServiceLifetime.Scoped)
         .AddAutoFactory<IndexFactory>(ServiceLifetime.Scoped)
         .AddAutoFactory<ObjectResolverFactory, ObjectResolver>(ServiceLifetime.Scoped)
-        .AddAutoFactory<BranchRefReaderFactory>(ServiceLifetime.Scoped)
+        .AddAutoFactory<BranchRefReaderFactory, BranchRefReader>(ServiceLifetime.Scoped)
         .AddAutoFactory<LooseReaderFactory>(ServiceLifetime.Scoped)
         .AddAutoFactory<LfsReaderFactory>(ServiceLifetime.Scoped)
         .AddAutoFactory<CommitGraphReaderFactory>(ServiceLifetime.Scoped)
@@ -62,5 +62,10 @@ public static class ServiceConfiguration
 
     private static IServiceCollection AddWriters(this IServiceCollection services) => services
         .AddAutoFactory<FastInsertWriterFactory>(ServiceLifetime.Scoped)
-        .AddAutoFactory<TransformationComposerFactory, TransformationComposer>(ServiceLifetime.Scoped);
+        .AddAutoFactory<PackWriterFactory>(ServiceLifetime.Scoped)
+        .AddAutoFactory<LooseWriterFactory>(ServiceLifetime.Scoped)
+        .AddAutoFactory<TransformationComposerFactory, TransformationComposer>(ServiceLifetime.Scoped)
+        .AddAutoFactory<BranchRefWriterFactory, BranchRefWriter>(ServiceLifetime.Scoped)
+        .AddAutoFactory<HeadWriterFactory>(ServiceLifetime.Scoped)
+        .AddAutoFactory<LockWriterFactory>(ServiceLifetime.Scoped);
 }

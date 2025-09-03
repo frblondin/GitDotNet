@@ -3,10 +3,10 @@ using Microsoft.Extensions.Logging;
 
 namespace GitDotNet.Readers;
 
-internal delegate StashRefReader StashRefReaderFactory(GitConnection connection);
+internal delegate StashRefReader StashRefReaderFactory(IGitConnection connection);
 
 /// <summary>Reads stash references from .git/logs/refs/stash file and returns Stash instances.</summary>
-internal class StashRefReader(GitConnection connection, IFileSystem fileSystem, ILogger<StashRefReader>? logger = null)
+internal class StashRefReader(IGitConnection connection, IFileSystem fileSystem, ILogger<StashRefReader>? logger = null)
 {
     private readonly string _reflogPath = fileSystem.Path.Combine(connection.Info.Path, "logs", "refs", "stash");
 

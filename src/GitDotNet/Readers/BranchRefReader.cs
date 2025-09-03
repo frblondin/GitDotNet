@@ -6,11 +6,17 @@ using Microsoft.Extensions.Logging;
 
 namespace GitDotNet.Readers;
 
-internal delegate BranchRefReader BranchRefReaderFactory(GitConnection connection);
+internal delegate IBranchRefReader BranchRefReaderFactory(IGitConnection connection);
 
-internal partial class BranchRefReader(GitConnection connection, IFileSystem fileSystem, ILogger<BranchRefReader>? logger = null)
+internal interface IBranchRefReader
 {
-    internal IImmutableDictionary<string, Branch> GetBranches()
+    IImmutableDictionary<string, Branch> GetBranches();
+}
+
+internal partial class BranchRefReader(IGitConnection connection,
+    IFileSystem fileSystem, ILogger<BranchRefReader>? logger = null) : IBranchRefReader
+{
+    public IImmutableDictionary<string, Branch> GetBranches()
     {
         logger?.LogInformation("Getting branches for repository: {Path}", connection.Info.Path);
         var branches = new SortedSet<Branch>();

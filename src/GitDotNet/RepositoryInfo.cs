@@ -33,7 +33,7 @@ public class RepositoryInfo : IRepositoryInfo
     /// <inheritdoc/>
     public ConfigReader Config => _config.Value;
 
-    /// <summary>Gets the current operation being performed.</summary>
+    /// <inheritdoc/>
     public CurrentOperation CurrentOperation => _operationReader.Value.Read();
 
     /// <summary>Gets the git normalized path of a file.</summary>
@@ -55,4 +55,7 @@ public interface IRepositoryInfo
 
     /// <summary>Gets the <see cref="ConfigReader"/> instance associated with the repository.</summary>
     ConfigReader Config { get; }
+
+    /// <summary>Gets the current operation being performed.</summary>
+    CurrentOperation CurrentOperation { get; }
 }

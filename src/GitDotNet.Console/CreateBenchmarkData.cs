@@ -31,7 +31,7 @@ public class CreateBenchmarkData(GitConnectionProvider factory, IHostApplication
         WriteLine($"Created {recordCount} records with size {recordSize} chars each in commit {commit.Id}.");
         host.StopApplication();
 
-        ITransformationComposer CreateData(ITransformationComposer composer)
+        void CreateData(ITransformationComposer composer)
         {
             for (int i = 0; i < recordCount; i++)
             {
@@ -43,7 +43,6 @@ public class CreateBenchmarkData(GitConnectionProvider factory, IHostApplication
                 }
                 composer.AddOrUpdate(fileName, builder.ToString());
             }
-            return composer;
         }
     }
 }
