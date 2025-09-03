@@ -78,7 +78,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
             {
                 // Protect against filesystem changes not being immediately visible
                 await Task.Delay(delayInMs).ConfigureAwait(false);
-                PackManager.UpdatePacks(force: true);
+                PackManager.UpdateIndices(force: true);
                 continue;
             }
         }
@@ -168,37 +168,37 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
 
     private async Task<UnlinkedEntry?> LoadFromPacksAsync(HashId id, Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider, bool throwIfNotFound)
     {
-        var (pack, index) = await FindPackAsync(id, throwIfNotFound).ConfigureAwait(false);
-        if (pack is null) return null;
-        return await pack.GetAsync(index, id, dependentEntryProvider).ConfigureAwait(false);
+        var (packIndex, index) = await FindPackAsync(id, throwIfNotFound).ConfigureAwait(false);
+        if (packIndex is null) return null;
+        return await packIndex.GetAsync(index, id, dependentEntryProvider).ConfigureAwait(false);
     }
 
-    private async Task<(PackReader? pack, int index)> FindPackAsync(HashId id, bool throwIfNotFound)
+    private async Task<(PackIndexReader? packIndexReader, int index)> FindPackAsync(HashId id, bool throwIfNotFound)
     {
         _logger?.LogDebug("FindPackAsync called for {HashId}", id);
-        var foundPack = default(PackReader?);
+        var foundPackIndex = default(PackIndexReader?);
         var foundIndex = -1;
-        foreach (var pack in PackManager.PackReaders)
+        foreach (var packIndex in PackManager.Indices)
         {
-            var index = await pack.IndexOfAsync(id).ConfigureAwait(false);
+            var index = await packIndex.GetIndexOfAsync(id).ConfigureAwait(false);
             if (index != -1)
             {
-                if (id.Hash.Count < HashLength && foundPack is not null)
+                if (id.Hash.Count < HashLength && foundPackIndex is not null)
                 {
                     _logger?.LogWarning("Ambiguous hash {HashId} found in multiple packs.", id);
                     throw new AmbiguousHashException();
                 }
-                foundPack = pack;
                 foundIndex = index;
-                if (id.Hash.Count >= HashLength) return (foundPack, foundIndex);
+                foundPackIndex = packIndex;
+                if (id.Hash.Count >= HashLength) break;
             }
         }
-        if (foundPack is null && throwIfNotFound)
+        if (foundPackIndex is null && throwIfNotFound)
         {
             _logger?.LogWarning("Hash {HashId} could not be found in any pack.", id);
             throw new KeyNotFoundException($"Hash {id} could not be found.");
         }
-        return (foundPack, foundIndex);
+        return (foundPackIndex, foundIndex);
     }
 
     internal Entry CreateEntry(EntryType type, HashId id, byte[] data) => type switch

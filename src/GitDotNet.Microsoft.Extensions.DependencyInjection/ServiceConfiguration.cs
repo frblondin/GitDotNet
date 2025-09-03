@@ -53,11 +53,8 @@ public static class ServiceConfiguration
         .AddAutoFactory<CommitGraphReaderFactory>(ServiceLifetime.Scoped)
         .AddAutoFactory<PackReaderFactory>(ServiceLifetime.Scoped)
         .AddAutoFactory<StashRefReaderFactory>(ServiceLifetime.Scoped)
-        .AddScoped<PackIndexFactory>(sp => path => 
-            PackIndexReader.LoadAsync(
-                path,
-                sp.GetRequiredService<IFileSystem>(),
-                sp.GetService<ILogger<PackIndexReader>>()))
+        .AddAutoFactory<StandardPackIndexReaderFactory>(ServiceLifetime.Scoped)
+        .AddAutoFactory<MultiPackIndexReaderFactory>(ServiceLifetime.Scoped)
         .AddScoped<IPackManager, PackManager>();
 
     private static IServiceCollection AddWriters(this IServiceCollection services) => services

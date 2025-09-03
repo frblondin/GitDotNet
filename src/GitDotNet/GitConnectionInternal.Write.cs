@@ -25,7 +25,7 @@ internal partial class GitConnectionInternal
         if (author != null) command += $" --author=\"{author.Name} <{author.Email}>\"";
         _logger?.LogDebug("Executing git command: {Command}", command);
         GitCliCommand.Execute(Info.RootFilePath, command, updateEnvironmentVariables: AddCommitter);
-        (Objects as IObjectResolverInternal)?.PackManager.UpdatePacks(force: true);
+        (Objects as IObjectResolverInternal)?.PackManager.UpdateIndices(force: true);
         var tip = await Head.GetTipAsync().ConfigureAwait(false);
         _logger?.LogInformation("Commit completed. New tip: {TipId}", tip.Id);
         return tip;
@@ -76,7 +76,7 @@ internal partial class GitConnectionInternal
         {
             _logger?.LogDebug("Skipping HEAD update for {CanonicalName}. Commit: {CommitId}", canonicalName, result);
         }
-        (Objects as IObjectResolverInternal)?.PackManager.UpdatePacks(force: true);
+        (Objects as IObjectResolverInternal)?.PackManager.UpdateIndices(force: true);
         var committed = await Objects.GetAsync<CommitEntry>(result!).ConfigureAwait(false);
         _logger?.LogInformation("Commit to branch {CanonicalName} completed. Commit: {CommitId}", canonicalName, committed.Id);
         return committed;

@@ -1,152 +1,192 @@
-using System.Buffers;
 using System.Buffers.Binary;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
+using GitDotNet.Tools;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using System.Linq;
 
 namespace GitDotNet.Readers;
 
-internal delegate Task<PackIndexReader> PackIndexFactory(string path);
+internal delegate PackIndexReader.Standard StandardPackIndexReaderFactory(string path);
+internal delegate PackIndexReader.MultiPack MultiPackIndexReaderFactory(string path);
 
-internal class PackIndexReader(string path, int version, int[] fanout, byte[] packChecksum, byte[] checksum, IFileSystem fileSystem)
+internal abstract partial class PackIndexReader : IDisposable
 {
-    private const int FanOutTableSize = 256;
-    private readonly byte[] _data = fileSystem.File.ReadAllBytes(path);
+    /// <summary>Maximum number of object names to load into memory for faster access.</summary>
+    private const long MaxInMemoryFileSize = 32_000_000;
 
-    public int Version { get; } = version;
-    public byte[] PackChecksum { get; } = packChecksum;
-    public byte[] Checksum { get; } = checksum;
-    public int Count => fanout[FanOutTableSize - 1];
+    protected const int FanOutTableSize = 256;
 
-    private int SortedObjectNamesOffset => Version switch
+    /// <summary>Use a weak reference to allow the offset stream reader to be garbage collected if memory is needed.</summary>
+    private readonly WeakReference<IFileOffsetStreamReader> _offsetStreamReader;
+    private readonly FileOffsetStreamReaderFactory _offsetStreamReaderFactory;
+    protected readonly IFileSystem _fileSystem;
+    private readonly ILogger<PackIndexReader>? _logger;
+    private bool _disposedValue;
+    private readonly CancellationTokenSource _disposed = new();
+    private readonly object _lock = new();
+
+    private protected PackIndexReader(string path, PackReaderFactory packReaderFactory, FileOffsetStreamReaderFactory offsetStreamReaderFactory, IFileSystem fileSystem, IMemoryCache cache, ILogger<PackIndexReader>? logger = null)
     {
-        2 => 2 * 4 + FanOutTableSize * 4,
-        _ => throw new NotSupportedException($"Version {Version} is not supported.")
-    };
+        Path = path;
+        _offsetStreamReaderFactory = offsetStreamReaderFactory;
+        _fileSystem = fileSystem;
+        var size = fileSystem.FileInfo.New(path).Length;
+        _offsetStreamReader = new(size > MaxInMemoryFileSize ?
+            offsetStreamReaderFactory(path) :
+            cache.GetOrCreate(path, e =>
+            {
+                e.SetSize(size);
+                e.SetPriority(CacheItemPriority.Low);
+                return new FileInMemoryOffsetStreamReader(path, fileSystem);
+            })!);
+        _logger = logger;
+        _logger?.LogInformation("Loading pack index file: {Path}", path);
 
-    private int Crc32ValuesOffset => Version switch
-    {
-        2 => SortedObjectNamesOffset + Count * ObjectResolver.HashLength,
-        _ => throw new NotSupportedException($"Version {Version} is not supported.")
-    };
-
-    private int PackFilePositionOffset => Version switch
-    {
-        2 => Crc32ValuesOffset + Count * 4,
-        _ => throw new NotSupportedException($"Version {Version} is not supported.")
-    };
-
-    [ExcludeFromCodeCoverage]
-    private int LargePackFilePositionOffset => Version switch
-    {
-        2 => PackFilePositionOffset + Count * (ObjectResolver.HashLength + 4),
-        _ => throw new NotSupportedException($"Version {Version} is not supported.")
-    };
-
-    public static async Task<PackIndexReader> LoadAsync(string path, IFileSystem fileSystem, ILogger<PackIndexReader>? logger = null)
-    {
-        logger?.LogInformation("Loading pack index file: {Path}", path);
-        if (!fileSystem.File.Exists(path))
-        {
-            logger?.LogWarning("Pack index file not found: {Path}", path);
-            throw new FileNotFoundException("Pack index file not found: {Path}", path);
-        }
-        await using var stream = fileSystem.File.OpenReadAsynchronous(path);
-        var fourByteBuffer = ArrayPool<byte>.Shared.Rent(4);
+        WriteTime = fileSystem.FileInfo.New(path).LastWriteTime;
+        using var stream = OffsetStreamReader.OpenRead(0L);
+#pragma warning disable S2139 // Exceptions should be either logged or rethrown but not both
         try
         {
-            await stream.ReadExactlyAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
-            var version = await ReadVersion(stream, fourByteBuffer).ConfigureAwait(false);
-            var fanout = new int[FanOutTableSize];
-            for (var i = 0; i < FanOutTableSize; i++)
-            {
-                await stream.ReadExactlyAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
-                fanout[i] = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
-            }
+#pragma warning disable S1699 // Constructors should only call non-overridable methods
+            Version = ReadVersion(stream);
+            HashLength = ReadHashLength(stream);
+            PackReaders = ReadPacks(stream);
+#pragma warning restore S1699 // Constructors should only call non-overridable methods
+            Fanout = ReadFanOutTable(stream);
 
-            // Read last 20-byte of stream to get the last hash
-            stream.Seek(-2 * ObjectResolver.HashLength, SeekOrigin.End);
-            var packChecksum = new byte[ObjectResolver.HashLength];
-            await stream.ReadExactlyAsync(packChecksum).ConfigureAwait(false);
-            var checksum = new byte[ObjectResolver.HashLength];
-            await stream.ReadExactlyAsync(packChecksum).ConfigureAwait(false);
-
-            var packIndexReader = new PackIndexReader(path, version, fanout, packChecksum, checksum, fileSystem);
-            logger?.LogInformation("Successfully loaded pack index file: {Path}, version: {Version}, object count: {ObjectCount}", path, version, fanout[FanOutTableSize - 1]);
-            return packIndexReader;
+            _logger?.LogInformation("Successfully loaded pack index file: {Path}, version: {Version}, object count: {ObjectCount}", Path, Version, Fanout[FanOutTableSize - 1]);
         }
         catch (Exception ex)
         {
-            logger?.LogError(ex, "Error loading pack index file: {Path}", path);
+            _logger?.LogError(ex, "Error loading pack index file: {Path}", Path);
             throw;
         }
-        finally
+#pragma warning restore S2139 // Exceptions should be either logged or rethrown but not both
+    }
+
+    public string Path { get; }
+
+    public IFileOffsetStreamReader OffsetStreamReader
+    {
+        get
         {
-            ArrayPool<byte>.Shared.Return(fourByteBuffer);
+            lock (_lock)
+            {
+                if (!_offsetStreamReader.TryGetTarget(out var reader))
+                {
+                    reader = _offsetStreamReaderFactory(Path);
+                    _offsetStreamReader.SetTarget(reader);
+                }
+                return reader;
+            }
         }
     }
 
-    [ExcludeFromCodeCoverage(Justification = "Only for debugging purpose.")]
-    public async Task<HashId> GetHashAsync(long offset)
+    public int Version { get; private set; }
+
+    public int[] Fanout { get; private set; }
+
+    public int HashLength { get; private set; }
+
+    public int Count => Fanout[FanOutTableSize - 1];
+
+    internal bool IsObsolete { get; set; }
+
+    protected abstract int HeaderLength { get; }
+
+    protected abstract long FanOutTableOffset { get; }
+
+    protected abstract long SortedObjectNamesOffset { get; }
+
+    protected abstract long PackFilePositionOffset { get; }
+
+    protected abstract long PackFilePositionLongOffset { get; }
+
+    internal IList<(string Path, Lazy<PackReader> Reader)> PackReaders { get; }
+
+    public DateTime WriteTime { get; }
+
+    public bool HasBeenModified =>
+        !_fileSystem.File.Exists(Path) ||
+        WriteTime != _fileSystem.FileInfo.New(Path).LastWriteTime;
+
+    private int[] ReadFanOutTable(Stream stream)
     {
-        for (int i = 0; i < Count; i++)
+        stream.Seek(FanOutTableOffset, SeekOrigin.Begin);
+        var bytes = new byte[4];
+        var result = new int[FanOutTableSize];
+        for (var i = 0; i < FanOutTableSize; i++)
         {
-            var packFileOffset = await GetPackFileOffsetAsync(i).ConfigureAwait(false);
-            if (packFileOffset == offset)
-            {
-                return await GetHashAsync(i).ConfigureAwait(false);
-            }
+            stream.ReadExactly(bytes);
+            result[i] = BinaryPrimitives.ReadInt32BigEndian(bytes);
         }
-        throw new NotSupportedException($"Couldn't find the corresponding hash for offset {offset} in pack index {this.GetType().Name}.");
+        return result;
     }
+
+    protected abstract int ReadVersion(Stream stream);
+
+    protected abstract int ReadHashLength(Stream stream);
+
+    protected abstract IList<(string Path, Lazy<PackReader> Reader)> ReadPacks(Stream stream);
 
     public async Task<HashId> GetHashAsync(int index)
     {
-        using var stream = new MemoryStream(_data, writable: false);
-        stream.Seek(SortedObjectNamesOffset + index * 20, SeekOrigin.Begin);
-        var hash = new byte[ObjectResolver.HashLength];
-        await stream.ReadExactlyAsync(hash.AsMemory(0, ObjectResolver.HashLength)).ConfigureAwait(false);
+        using var stream = OpenSortedObjectNameStream(index);
+        return await GetHashAsync(stream).ConfigureAwait(false);
+    }
+
+    private Stream OpenSortedObjectNameStream(int index) => OffsetStreamReader.OpenRead(SortedObjectNamesOffset + index * HashLength);
+
+    private async Task<HashId> GetHashAsync(Stream stream)
+    {
+        var hash = new byte[HashLength];
+        await stream.ReadExactlyAsync(hash.AsMemory(0, HashLength)).ConfigureAwait(false);
         return hash;
     }
 
     public async Task<int> GetIndexOfAsync(HashId id)
     {
-        using var stream = new MemoryStream(_data, writable: false);
-        var hashBuffer = new byte[ObjectResolver.HashLength];
+        using var stream = OffsetStreamReader.OpenRead(0L);
+        var hashBuffer = new byte[HashLength];
         var fanoutPosition = id.Hash[0];
-        var end = fanout[fanoutPosition];
-        var start = fanoutPosition > 0 ? fanout[fanoutPosition - 1] : 0;
+        var end = Fanout[fanoutPosition];
+        var start = fanoutPosition > 0 ? Fanout[fanoutPosition - 1] : 0;
 
-        stream.Seek(SortedObjectNamesOffset + start * 20, SeekOrigin.Begin);
-
-        (end, start, var result) = await FindHashIndexAsync(id, stream, hashBuffer, end, start).ConfigureAwait(false);
-        if (result != -1 && id.Hash.Count < ObjectResolver.HashLength)
+        var index = await FindHashIndexAsync(id, GetHashInSortedObjectNames, end, start).ConfigureAwait(false);
+        if (index != -1 && id.Hash.Count < HashLength)
         {
-            await CheckForAmbiguousHash(start, end, result, hashBuffer).ConfigureAwait(false);
+            await CheckForAmbiguousHash(id, GetHashInSortedObjectNames,
+                Math.Max(0, index - 1), Math.Min(end, index + 1), index).ConfigureAwait(false);
         }
-        return result;
+        return index;
 
-        async Task CheckForAmbiguousHash(int start, int end, int alreadyFound, byte[] hashBuffer)
+        async Task<byte[]> GetHashInSortedObjectNames(int index)
         {
-            stream.Seek(SortedObjectNamesOffset + start * 20, SeekOrigin.Begin);
-            for (var i = start; i < end; i++)
-            {
-                await stream.ReadExactlyAsync(hashBuffer).ConfigureAwait(false);
-                AmbiguousHashException.CheckForAmbiguousHashMatch(id, alreadyFound, hashBuffer, i);
-            }
+            stream.Seek(SortedObjectNamesOffset + index * HashLength, SeekOrigin.Begin);
+            await stream.ReadExactlyAsync(hashBuffer).ConfigureAwait(false);
+            return hashBuffer;
         }
     }
 
-    private async Task<(int end, int start, int result)> FindHashIndexAsync(HashId id, MemoryStream stream, byte[] hashBuffer, int end, int start)
+    private static async Task CheckForAmbiguousHash(HashId id, Func<int, Task<byte[]>> objectRetrieval, int start, int end, int alreadyFound)
+    {
+        for (var i = start; i < end; i++)
+        {
+            var hash = await objectRetrieval(i).ConfigureAwait(false);
+            AmbiguousHashException.CheckForAmbiguousHashMatch(id, alreadyFound, hash, i);
+        }
+    }
+
+    private static async Task<int> FindHashIndexAsync(HashId id, Func<int, Task<byte[]>> objectRetrieval, int end, int start)
     {
         var result = -1;
         while (start < end)
         {
             var mid = (start + end) / 2;
-            stream.Seek(SortedObjectNamesOffset + mid * 20, SeekOrigin.Begin);
-            await stream.ReadExactlyAsync(hashBuffer.AsMemory(0, ObjectResolver.HashLength)).ConfigureAwait(false);
-
-            var comparison = id.CompareTo(hashBuffer.AsSpan(0, id.Hash.Count));
+            var hash = await objectRetrieval(mid).ConfigureAwait(false);
+            var comparison = id.CompareTo(hash.AsSpan(0, id.Hash.Count));
             if (comparison == 0)
             {
                 result = mid;
@@ -162,35 +202,30 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
             }
         }
 
-        return (end, start, result);
+        return result;
     }
 
-    public async Task<long> GetPackFileOffsetAsync(int index)
+    public async Task<UnlinkedEntry> GetAsync(int index, HashId id, Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider)
     {
-        using var stream = new MemoryStream(_data, writable: false);
-        var offset = ArrayPool<byte>.Shared.Rent(4);
-        var hashBuffer = ArrayPool<byte>.Shared.Rent(ObjectResolver.HashLength);
-        try
-        {
-            stream.Seek(PackFilePositionOffset + index * 4, SeekOrigin.Begin);
-            await stream.ReadExactlyAsync(offset.AsMemory(0, 4)).ConfigureAwait(false);
-            var result = (long)BinaryPrimitives.ReadInt32BigEndian(offset.AsSpan(0, 4));
-            result = await CalculateLargePackFileOffset(index, stream, offset, result).ConfigureAwait(false);
-            return result;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(hashBuffer);
-            ArrayPool<byte>.Shared.Return(offset);
-        }
+        using var stream = OffsetStreamReader.OpenRead(0);
+        var (reader, offset) = await GetPackFileOffsetAsync(index, stream).ConfigureAwait(false);
+
+        return await reader.GetByOffsetAsync(offset, async () => await reader.ReadAsync(id, offset, dependentEntryProvider).ConfigureAwait(false)).ConfigureAwait(false);
     }
+
+    protected abstract Task<(PackReader, long)> GetPackFileOffsetAsync(int index, Stream stream);
 
     [ExcludeFromCodeCoverage]
-    private async Task<long> CalculateLargePackFileOffset(int index, MemoryStream stream, byte[] offset, long result)
+    protected async Task<long> CalculateLargePackFileOffset(int index, Stream stream, byte[] offset, long result)
     {
         if (result > 0x80000000)
         {
-            stream.Seek(LargePackFilePositionOffset + index * 8, SeekOrigin.Begin);
+            if (PackFilePositionLongOffset < 0)
+            {
+                throw new InvalidDataException("Pack file offset is too large, but no long offset table exists.");
+            }
+
+            stream.Seek(PackFilePositionLongOffset + index * 8, SeekOrigin.Begin);
             await stream.ReadExactlyAsync(offset.AsMemory(0, 8)).ConfigureAwait(false);
             result = BinaryPrimitives.ReadInt32BigEndian(offset.AsSpan(0, 4));
         }
@@ -198,21 +233,56 @@ internal class PackIndexReader(string path, int version, int[] fanout, byte[] pa
         return result;
     }
 
-    private static async Task<int> ReadVersion(Stream stream, byte[] fourByteBuffer)
+    public async IAsyncEnumerable<(int Position, HashId Id)> GetHashesAsync()
     {
-        var version = 1;
-        // Version is set only if bytes equal 255, 116, 79, 99
-        if (fourByteBuffer[0] == 255 && fourByteBuffer[1] == 116 && fourByteBuffer[2] == 79 && fourByteBuffer[3] == 99)
-        {
-            await stream.ReadExactlyAsync(fourByteBuffer.AsMemory(0, 4)).ConfigureAwait(false);
-            version = BinaryPrimitives.ReadInt32BigEndian(fourByteBuffer.AsSpan(0, 4));
-        }
-        else
-        {
-            // In version 1 of pack files, the index does not have a header
-            stream.Seek(0, SeekOrigin.Begin);
-        }
+        ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(PackReader));
 
-        return version;
+        using var stream = OpenSortedObjectNameStream(0);
+        for (int i = 0; i < Count; i++)
+        {
+            yield return (i, await GetHashAsync(stream).ConfigureAwait(false));
+        }
+    }
+
+    /// <summary>
+    /// Cleans up resources used by the object, allowing for both managed and unmanaged resource disposal.
+    /// </summary>
+    /// <param name="disposing">Indicates whether to release both managed and unmanaged resources or just unmanaged resources.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                IsObsolete = true;
+                if (!_disposed.IsCancellationRequested)
+                    _disposed.Cancel();
+                _disposed.Dispose();
+                if (_offsetStreamReader.TryGetTarget(out var reader))
+                {
+                    reader.Dispose();
+                }
+                DisposePackReaders();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
+    private void DisposePackReaders()
+    {
+        foreach (var reader in from r in PackReaders
+                               where r.Reader.IsValueCreated
+                               select r.Reader.Value)
+        {
+            reader.Dispose();
+        }
+    }
+
+    public void Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }

@@ -7,29 +7,41 @@ namespace GitDotNet.Readers;
 internal class SlidingMemoryMappedStream : Stream
 {
     private readonly MemoryMappedFile _memoryMappedFile;
-    private readonly long _initialOffset;
-    private readonly List<MemoryMappedViewStream> _views = new();
-    private long _position;
+    private long _position = 0;
+    private MemoryMappedViewStream? _currentView;
+    private long _currentViewStart = -1;
     private const int ViewSize = 65536; // 64 KB
 
     public SlidingMemoryMappedStream(MemoryMappedFile memoryMappedFile, long offset, long length)
     {
         _memoryMappedFile = memoryMappedFile;
-        _initialOffset = offset;
-        _position = 0;
+        _position = offset;
         Length = length;
-        CreateView(_initialOffset);
     }
 
-    private void CreateView(long offset)
+    private void EnsureViewForPosition(long streamPosition)
     {
-        // Use Read access to allow concurrent reads, fail if a write is in progress (default for MemoryMappedFileAccess.Read)
-        var view = _memoryMappedFile.CreateViewStream(offset, Math.Min(ViewSize, Length - offset), MemoryMappedFileAccess.Read);
-        _views.Add(view);
+        var fileOffset = (streamPosition / ViewSize) * ViewSize;
+
+        // If we already have the right view, we're done
+        if (_currentView != null && _currentViewStart == fileOffset)
+            return;
+
+        // Dispose old view and create new one
+        _currentView?.Dispose();
+
+        var remainingStreamLength = Length - fileOffset;
+        var viewLength = Math.Min(ViewSize, remainingStreamLength);
+
+        if (viewLength <= 0)
+            throw new InvalidOperationException("Cannot create view beyond stream bounds.");
+
+        _currentView = _memoryMappedFile.CreateViewStream(fileOffset, viewLength, MemoryMappedFileAccess.Read);
+        _currentViewStart = fileOffset;
     }
 
     public override bool CanRead => true;
-    public override bool CanSeek => false;
+    public override bool CanSeek => true;
     public override bool CanWrite => false;
     public override long Length { get; }
 
@@ -38,8 +50,8 @@ internal class SlidingMemoryMappedStream : Stream
         get => _position;
         set
         {
-            if (value < 0 || value >= Length)
-                throw new ArgumentOutOfRangeException(nameof(value), "Position must be within the length of the stream.");
+            if (value < 0 || value > Length)
+                throw new ArgumentOutOfRangeException(nameof(value), "Position must be within the bounds of the stream.");
             _position = value;
         }
     }
@@ -52,20 +64,27 @@ internal class SlidingMemoryMappedStream : Stream
             throw new ArgumentOutOfRangeException(nameof(offset), "Offset and count must be within the bounds of the buffer.");
 
         int totalBytesRead = 0;
+
         while (count > 0 && _position < Length)
         {
-            var viewIndex = (int)(_position / ViewSize);
-            var viewOffset = (int)(_position % ViewSize);
+            // Ensure we have a view for the current position
+            EnsureViewForPosition(_position);
 
-            if (viewIndex >= _views.Count)
-            {
-                CreateView(_initialOffset + viewIndex * ViewSize);
-            }
+            // Calculate offset within the current view
+            var viewOffset = (int)(_position - _currentViewStart);
 
-            var view = _views[viewIndex];
-            view.Seek(viewOffset, SeekOrigin.Begin);
+            // Position the view stream
+            _currentView!.Seek(viewOffset, SeekOrigin.Begin);
 
-            var bytesRead = view.Read(buffer, offset, Math.Min(count, ViewSize - viewOffset));
+            // Calculate how much we can read from this view
+            var remainingInView = ViewSize - viewOffset;
+            var remainingInStream = Length - _position;
+            var bytesToRead = Math.Min(count, Math.Min(remainingInView, remainingInStream));
+
+            if (bytesToRead <= 0)
+                break;
+
+            var bytesRead = _currentView.Read(buffer, offset, (int)bytesToRead);
             if (bytesRead == 0)
                 break;
 
@@ -73,12 +92,30 @@ internal class SlidingMemoryMappedStream : Stream
             offset += bytesRead;
             count -= bytesRead;
             _position += bytesRead;
+
+            // If we've read all we can from this view and still have more to read,
+            // the next iteration will create the next view
         }
 
         return totalBytesRead;
     }
 
-    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin)
+    {
+        long newPosition = origin switch
+        {
+            SeekOrigin.Begin => offset,
+            SeekOrigin.Current => _position + offset,
+            SeekOrigin.End => Length + offset,
+            _ => throw new ArgumentOutOfRangeException(nameof(origin), "Invalid SeekOrigin value.")
+        };
+
+        if (newPosition < 0 || newPosition > Length)
+            throw new ArgumentOutOfRangeException(nameof(offset), "The resulting position must be within the bounds of the stream.");
+
+        _position = newPosition;
+        return _position;
+    }
 
     public override void SetLength(long value) => throw new NotSupportedException();
 
@@ -88,11 +125,8 @@ internal class SlidingMemoryMappedStream : Stream
     {
         if (disposing)
         {
-            foreach (var view in _views)
-            {
-                view.Dispose();
-            }
-            _views.Clear();
+            _currentView?.Dispose();
+            _currentView = null;
         }
         base.Dispose(disposing);
     }
