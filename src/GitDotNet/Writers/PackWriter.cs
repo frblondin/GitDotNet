@@ -61,7 +61,7 @@ internal class PackWriter : IDisposable
 
         // Create a unique temporary pack filename using process ID and random component
         var processId = Environment.ProcessId;
-        var randomSuffix = Path.GetRandomFileName().Replace(".", "")[..8]; // Take first 8 chars
+        var randomSuffix = fileSystem.Path.GetRandomFileName().Replace(".", "")[..8]; // Take first 8 chars
         var tempPackFileName = $".tmp-{processId}-pack-{randomSuffix}.pack";
         var tempIndexFileName = $".tmp-{processId}-pack-{randomSuffix}.idx";
 
@@ -262,16 +262,16 @@ internal class PackWriter : IDisposable
         }
 
         // Now write CRC32 values in HashId order (for index)
-        foreach (var entry in indexSortedEntries)
+        foreach (var id in indexSortedEntries.Select(e => e.Id))
         {
-            if (crc32Map.TryGetValue(entry.Id, out var crc32Hash))
+            if (crc32Map.TryGetValue(id, out var crc32Hash))
             {
                 await indexCryptoStream.WriteAsync(crc32Hash, cancellationToken).ConfigureAwait(false);
-                _logger?.LogDebug("Wrote CRC32 for entry {Id}", entry.Id);
+                _logger?.LogDebug("Wrote CRC32 for entry {Id}", id);
             }
             else
             {
-                throw new InvalidOperationException($"CRC32 not found for entry {entry.Id}");
+                throw new InvalidOperationException($"CRC32 not found for entry {id}");
             }
         }
     }
@@ -317,9 +317,9 @@ internal class PackWriter : IDisposable
         finally
         {
             // Clean up streams
-            _indexCryptoStream?.Dispose();
+            if (_indexCryptoStream is not null) await _indexCryptoStream.DisposeAsync();
             _indexSha1?.Dispose();
-            _indexBaseStream?.Dispose();
+            if (_indexBaseStream is not null) await _indexBaseStream.DisposeAsync();
 
             _indexCryptoStream = null;
             _indexSha1 = null;
@@ -357,6 +357,7 @@ internal class PackWriter : IDisposable
         {
             if (disposing)
             {
+#pragma warning disable S2139 // Exceptions should be either logged or rethrown but not both
                 try
                 {
                     // Clean up any remaining index streams
@@ -384,6 +385,7 @@ internal class PackWriter : IDisposable
 
                     throw;
                 }
+#pragma warning restore S2139 // Exceptions should be either logged or rethrown but not both
 
                 _entries.Clear();
                 _objectOffsets.Clear();

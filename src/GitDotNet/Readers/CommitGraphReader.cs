@@ -92,7 +92,7 @@ internal partial class CommitGraphReader : IDisposable
             var graphPathBuffer = new byte[256];
             chainStream.ReadExactly(graphPathBuffer.AsSpan(0, 256));
             var graphPath = Encoding.UTF8.GetString(graphPathBuffer).TrimEnd('\0');
-            var fullGraphPath = Path.Combine(path, "objects", "info", "commit-graphs", graphPath);
+            var fullGraphPath = fileSystem.Path.Combine(path, "objects", "info", "commit-graphs", graphPath);
             if (File.Exists(fullGraphPath))
             {
                 var commitGraphReader = offsetStreamReaderFactory(fullGraphPath);
