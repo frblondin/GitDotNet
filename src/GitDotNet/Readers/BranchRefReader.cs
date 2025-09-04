@@ -28,7 +28,7 @@ internal partial class BranchRefReader(IGitConnection connection,
 
     private void GetBranchesFromPackedRefsFile(SortedSet<Branch> branches)
     {
-        var refsFilePath = Path.Combine(connection.Info.Path, "packed-refs");
+        var refsFilePath = fileSystem.Path.Combine(connection.Info.Path, "packed-refs");
 
         if (fileSystem.File.Exists(refsFilePath))
         {
@@ -52,15 +52,15 @@ internal partial class BranchRefReader(IGitConnection connection,
 
     private void GetBranchesFromRefsDirectory(SortedSet<Branch> branches)
     {
-        var refsPath = Path.Combine(connection.Info.Path, "refs");
+        var refsPath = fileSystem.Path.Combine(connection.Info.Path, "refs");
 
         if (!fileSystem.Directory.Exists(refsPath))
         {
             logger?.LogWarning("Refs directory does not exist: {RefsPath}", refsPath);
             return;
         }
-        var localBranchesPath = Path.Combine(refsPath, "heads");
-        var remoteBranchesPath = Path.Combine(refsPath, "remotes");
+        var localBranchesPath = fileSystem.Path.Combine(refsPath, "heads");
+        var remoteBranchesPath = fileSystem.Path.Combine(refsPath, "remotes");
 
         if (fileSystem.Directory.Exists(localBranchesPath))
         {
