@@ -275,9 +275,13 @@ public class GitConnectionTests
         var folder = Path.Combine(TestContext.CurrentContext.WorkDirectory, TestContext.CurrentContext.Test.Name);
         TestUtils.ForceDeleteDirectory(folder);
         GitConnection.Create(folder);
-        await using (var writer = File.CreateText(Path.Combine(folder, "file.txt")))
+        await using (var writer = File.CreateText(Path.Combine(folder, "file1.txt")))
         {
             await writer.WriteAsync("foo");
+        }
+        await using (var writer = File.CreateText(Path.Combine(folder, "file2.txt")))
+        {
+            await writer.WriteAsync("bar");
         }
         using var sut = CreateProvider().Invoke(folder);
 
@@ -288,12 +292,12 @@ public class GitConnectionTests
         using (new AssertionScope())
         {
             var entries = await sut.Index.GetEntriesAsync();
-            entries.Should().HaveCount(1);
-            entries[0].Path.ToString().Should().Be("file.txt");
-            entries[0].Type.Should().Be(IndexEntryType.Regular);
-            entries[0].UnixPermissions.Should().Be(420);
-            var blob = await entries[0].GetEntryAsync<BlobEntry>();
-            blob.GetText().Should().Be("foo");
+            entries.Should().HaveCount(2);
+            entries[1].Path.ToString().Should().Be("file2.txt");
+            entries[1].Type.Should().Be(IndexEntryType.Regular);
+            entries[1].UnixPermissions.Should().Be(420);
+            var blob = await entries[1].GetEntryAsync<BlobEntry>();
+            blob.GetText().Should().Be("bar");
         }
     }
 
