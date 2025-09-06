@@ -83,7 +83,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
             }
         }
 
-        _options.Value.ApplyTo(entry, result, _disposed.Token);
+        _options.Value.ApplyTo(entry, result, result?.Data.LongLength ?? 0L, _disposed.Token);
 
         // Ensure the hash is correct, it may be null if produced through OFS delta within a pack from offset.
         return result is null || result.Id.Hash.Count > 0 ? result : result with { Id = id };
@@ -134,7 +134,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
             var unlinked = await GetUnlinkedEntryAsync(id, throwIfNotFound).ConfigureAwait(false);
             result = unlinked is not null ? (TEntry)CreateEntry(unlinked) : null;
         }
-        _options.Value.ApplyTo(entry, result, _disposed.Token);
+        _options.Value.ApplyTo(entry, result, result?.Data.LongLength ?? 0L, _disposed.Token);
 
         // Ensure the hash is correct, it may be null if produced through OFS delta within a pack from offset.
         if (result is not null && (result.Id is null || result.Id.Hash.Count == 0))
