@@ -19,11 +19,11 @@ public partial interface IGitConnection
         /// </summary>
         public TimeSpan? SlidingCacheExpiration { get; set; } = TimeSpan.FromMilliseconds(100);
 
-        internal void ApplyTo(ICacheEntry entry, object? value, CancellationToken token)
+        internal void ApplyTo(ICacheEntry entry, object? value, long size, CancellationToken token)
         {
             if (value is not null)
             {
-                entry.SetSize(1);
+                entry.SetSize(size);
                 entry.AddExpirationToken(new CancellationChangeToken(token));
                 if (SlidingCacheExpiration.HasValue)
                 {
