@@ -6,7 +6,7 @@
     <PackageVersion Include="AwesomeAssertions" Version="8.2.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
-    <PackageVersion Include="FlexLabs.EntityFrameworkCore.Upsert" Version="9.0.0" />
+    <PackageVersion Include="FlexLabs.EntityFrameworkCore.Upsert" Version="9.100.0" />
     <PackageVersion Include="LangChain.Core" Version="0.17.0" />
     <PackageVersion Include="LangChain.Databases.Sqlite" Version="0.17.0" />
     <PackageVersion Include="LangChain.Providers.Ollama" Version="0.17.0" />
