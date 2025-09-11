@@ -374,7 +374,7 @@ public class GitConnectionTests
             {
                 for (int i = 0; i < 1_000; i++)
                 {
-                    c.AddOrUpdate($"GeneratedClass{i:000}.cs", $"{baseTemplate}{i:000}");
+                    c.AddOrUpdate($"a/b/GeneratedClass{i:000}.cs", $"{baseTemplate}{i:000}");
                 }
             },
             sut.CreateCommit("Commit message",
@@ -387,7 +387,8 @@ public class GitConnectionTests
         {
             var headTip = await sut.Branches["refs/heads/main"].GetTipAsync();
             headTip.Id.Should().Be(commit.Id);
-            var tree = await commit.GetRootTreeAsync();
+            var rootTree = await commit.GetRootTreeAsync();
+            var tree = await (await rootTree.GetFromPathAsync("a/b"))!.GetEntryAsync<TreeEntry>();
             tree.Children.Should().HaveCount(1_000);
             var blob = await (await tree.GetFromPathAsync("GeneratedClass500.cs"))!.GetEntryAsync<BlobEntry>();
             blob.GetText().Should().Be($"{baseTemplate}500");

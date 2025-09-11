@@ -15,7 +15,7 @@ internal class PackCommitWriter(TransformationComposer composer, IRepositoryInfo
     {
         using var packWriter = packWriterFactory(info);
         var modifiedBlobs = new Dictionary<GitPath, HashId>();
-        var modifiedTrees = new Dictionary<string, HashId>();
+        var modifiedTrees = new Dictionary<GitPath, HashId>();
         var addedObjects = new HashSet<HashId>(); // Track added objects to avoid duplicates
         var objectResolver = commit.ObjectResolver;
 
@@ -23,24 +23,23 @@ internal class PackCommitWriter(TransformationComposer composer, IRepositoryInfo
         await ProcessBlobChangesAsync(packWriter, modifiedBlobs, addedObjects).ConfigureAwait(false);
 
         // Step 2: Build the new tree hierarchy from bottom up using shared method
-        var newRootTreeId = await BuildTreeHierarchySharedAsync(
-            baseRootTree, modifiedBlobs, modifiedTrees, objectResolver,
-            async (baseRoot, dirPath, blobs, trees, resolver) =>
-                await ProcessDirectorySharedAsync(baseRoot, dirPath, blobs, trees, resolver, (treeId, treeContent) =>
+        var newRootTreeId = await BuildTreeHierarchyAsync(
+            modifiedBlobs, async (dirPath) =>
+                await ProcessDirectoryAsync(baseRootTree, dirPath, modifiedBlobs, modifiedTrees, objectResolver, (treeId, treeContent) =>
+                {
+                    if (packWriter.TryAddEntry(EntryType.Tree, treeId, treeContent))
                     {
-                        if (packWriter.TryAddEntry(EntryType.Tree, treeId, treeContent))
-                        {
-                            addedObjects.Add(treeId);
-                        }
-                        return Task.FromResult(true);
-                    }).ConfigureAwait(false)
+                        addedObjects.Add(treeId);
+                    }
+                    return Task.CompletedTask;
+                }).ConfigureAwait(false)
         ).ConfigureAwait(false);
 
         // Step 3: Create the new commit with the new root tree
         var result = CreateNewCommit(packWriter, commit, newRootTreeId, addedObjects);
 
         // Step 4: Build entry paths mapping for enhanced delta optimization
-        var entryPaths = PackCommitWriter.BuildEntryPathsMapping(modifiedBlobs, modifiedTrees);
+        var entryPaths = BuildEntryPathsMapping(modifiedBlobs, modifiedTrees);
 
         // Step 5: Write the pack file with enhanced delta compression using previous tree context
         await packWriter.WritePackAsync(baseRootTree, entryPaths).ConfigureAwait(false);
@@ -52,27 +51,26 @@ internal class PackCommitWriter(TransformationComposer composer, IRepositoryInfo
     /// <param name="modifiedBlobs">Dictionary of modified blob paths and their IDs.</param>
     /// <param name="modifiedTrees">Dictionary of modified tree paths and their IDs.</param>
     /// <returns>A dictionary mapping entry IDs to their paths.</returns>
-    private static Dictionary<HashId, GitPath> BuildEntryPathsMapping(Dictionary<GitPath, HashId> modifiedBlobs, Dictionary<string, HashId> modifiedTrees)
+    private static Dictionary<HashId, GitPath> BuildEntryPathsMapping(Dictionary<GitPath, HashId> modifiedBlobs, Dictionary<GitPath, HashId> modifiedTrees)
     {
-        var entryPaths = new Dictionary<HashId, GitPath>();
+        var result = new Dictionary<HashId, GitPath>();
 
         // Map blob entries
         foreach (var (path, hashId) in modifiedBlobs)
         {
             if (!hashId.IsNull) // Skip removed entries
             {
-                entryPaths[hashId] = path;
+                result[hashId] = path;
             }
         }
 
         // Map tree entries
-        foreach (var (pathString, hashId) in modifiedTrees)
+        foreach (var (path, hashId) in modifiedTrees)
         {
-            var path = new GitPath(pathString);
-            entryPaths[hashId] = path;
+            result[hashId] = path;
         }
 
-        return entryPaths;
+        return result;
     }
 
     private async Task ProcessBlobChangesAsync(PackWriter packWriter, Dictionary<GitPath, HashId> modifiedBlobs, HashSet<HashId> addedObjects)

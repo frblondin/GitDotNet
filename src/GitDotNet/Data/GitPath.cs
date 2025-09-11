@@ -23,14 +23,29 @@ public sealed class GitPath : IEquatable<GitPath>, IComparable<GitPath>, IEnumer
         _pathChunks = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
     }
 
+    /// <summary>Gets an empty <see cref="GitPath"/>.</summary>
+    public static GitPath Empty { get; } = new();
+
+    /// <summary>Gets whether the current path is empty.</summary>
+    public bool IsEmpty => _pathChunks.Length == 0;
+
     /// <summary>Gets the path chunk at the specified index.</summary>
     public string Root => _pathChunks[0];
+
+    /// <summary>Gets the name of current path element.</summary>
+    public string Name => _pathChunks[^1];
+
+    /// <summary>Gets the parent path derived by removing the last segment from the current path.</summary>
+    public GitPath Parent => new(_pathChunks[..^1]);
 
     /// <summary>Gets the path chunk at the specified index.</summary>
     public int Length => _pathChunks.Length;
 
     /// <summary>Gets the path chunk of child.</summary>
     public GitPath ChildPath => new(_pathChunks[1..]);
+
+    /// <summary>Creates a new <see cref="GitPath"/> by appending a child segment to the current path.</summary>
+    public GitPath AddChild(string name) => new([.. _pathChunks, name]);
 
     /// <summary>Gets whether current instance contains <paramref name="other"/>.</summary>
     /// <param name="other">The path to be verified.</param>

@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using GitDotNet.Writers;
 
 namespace GitDotNet;
 
@@ -6,57 +8,59 @@ internal abstract class InternalCommitWriter(TransformationComposer composer)
 {
     internal abstract Task<HashId> WriteAsync(TreeEntry? baseRootTree, CommitEntry commit);
 
-    protected static async Task<HashId> BuildTreeHierarchySharedAsync(TreeEntry? baseRootTree,
-        Dictionary<GitPath, HashId> modifiedBlobs, Dictionary<string, HashId> modifiedTrees,
-        IObjectResolver objectResolver,
-        Func<TreeEntry?, string, Dictionary<GitPath, HashId>, Dictionary<string, HashId>, IObjectResolver, Task<HashId>> processDirectoryFunc)
+    protected static async Task<HashId> BuildTreeHierarchyAsync(Dictionary<GitPath, HashId> modifiedBlobs,
+        Func<GitPath, Task<HashId>> processDirectoryFunc)
     {
-        // Get all unique directory paths that need modification
-        var affectedPaths = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var path in modifiedBlobs.Keys)
-        {
-            for (int i = 0; i < path.Length - 1; i++)
-            {
-                var dirPath = string.Join("/", path.Take(i + 1));
-                affectedPaths.Add(dirPath);
-            }
-        }
-
         // Sort paths by depth (deepest first) to build from leaves up
-        var sortedPaths = affectedPaths.OrderByDescending(p => p.Split('/', StringSplitOptions.RemoveEmptyEntries).Length).ToList();
+        var sortedPaths = modifiedBlobs.Keys
+            .SelectMany(GetAllParentPaths)
+            .Distinct()
+            .OrderByDescending(p => p.Length);
 
         // Process each directory from deepest to root
-        foreach (var dirPath in sortedPaths)
+        foreach (var path in sortedPaths)
         {
-            await processDirectoryFunc(baseRootTree, dirPath, modifiedBlobs, modifiedTrees, objectResolver).ConfigureAwait(false);
+            await processDirectoryFunc(path).ConfigureAwait(false);
         }
 
         // Finally, process the root tree
-        return await processDirectoryFunc(baseRootTree, "", modifiedBlobs, modifiedTrees, objectResolver).ConfigureAwait(false);
+        return await processDirectoryFunc(GitPath.Empty).ConfigureAwait(false);
     }
 
-    protected async Task<HashId> ProcessDirectorySharedAsync(TreeEntry? baseRootTree, string dirPath,
-        Dictionary<GitPath, HashId> modifiedBlobs, Dictionary<string, HashId> modifiedTrees,
-        IObjectResolver objectResolver, Func<HashId, byte[], Task<bool>> writeTreeFunc)
+    private static IEnumerable<GitPath> GetAllParentPaths(GitPath path)
     {
-        var targetTree = await GetOrCreateTreeEntryAsync(baseRootTree, dirPath, objectResolver).ConfigureAwait(false);
+        var current = path.Parent;
+        while (current is not null)
+        {
+            yield return current;
+            if (current.IsEmpty)
+                yield break;
+            current = current.Parent;
+        }
+    }
+
+    protected async Task<HashId> ProcessDirectoryAsync(TreeEntry? baseRootTree, GitPath path,
+        Dictionary<GitPath, HashId> modifiedBlobs, Dictionary<GitPath, HashId> modifiedTrees,
+        IObjectResolver objectResolver, Func<HashId, byte[], Task> writeTreeFunc)
+    {
+        var targetTree = await GetOrCreateTreeEntryAsync(baseRootTree, path, objectResolver).ConfigureAwait(false);
 
         // Build new children list
-        var newChildren = new List<TreeEntryItem>();
-        var prefix = string.IsNullOrEmpty(dirPath) ? "" : dirPath + "/";
+        var newChildren = new Dictionary<GitPath, TreeEntryItem>();
 
-        AddUnmodifiedChildren(modifiedBlobs, modifiedTrees, objectResolver, targetTree, newChildren, prefix);
-        AddUntrackedChildren(modifiedBlobs, objectResolver, newChildren, prefix);
+        AddUnmodifiedChildren(path, modifiedBlobs, modifiedTrees, objectResolver, targetTree, newChildren);
+        AddUntrackedChildren(path, modifiedBlobs, objectResolver, newChildren);
+        AddDirectTrees(path, modifiedTrees, objectResolver, newChildren);
 
         // Sort children by name (Git requirement for deterministic tree hashes)
-        newChildren.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.Ordinal));
+        var sorted = newChildren.Values.OrderBy(x => x.Name, StringComparer.Ordinal);
 
         // Create tree content in Git format
-        var treeContent = CreateTreeContent(newChildren);
+        var treeContent = TreeEntryWriter.Write(sorted);
         var treeId = HashId.Create(EntryType.Tree, treeContent);
 
         // Only write tree if it's different from the original tree
-        var shouldWriteTree = string.IsNullOrEmpty(dirPath) || !targetTree.Id.Equals(treeId);
+        var shouldWriteTree = path.IsEmpty || !targetTree.Id.Equals(treeId);
 
         if (shouldWriteTree)
         {
@@ -64,25 +68,25 @@ internal abstract class InternalCommitWriter(TransformationComposer composer)
         }
 
         // Store in modified trees for parent processing
-        if (!string.IsNullOrEmpty(dirPath))
+        if (!path.IsEmpty)
         {
-            modifiedTrees[dirPath] = treeId;
+            modifiedTrees[path] = treeId;
         }
 
         return treeId;
     }
 
-    private static async Task<TreeEntry> GetOrCreateTreeEntryAsync(TreeEntry? baseRootTree, string dirPath, IObjectResolver objectResolver)
+    private static async Task<TreeEntry> GetOrCreateTreeEntryAsync(TreeEntry? baseRootTree, GitPath dirPath, IObjectResolver objectResolver)
     {
         // Get the tree at this path
         var targetTree = default(TreeEntry);
-        if (string.IsNullOrEmpty(dirPath) && baseRootTree is not null)
+        if (dirPath.IsEmpty && baseRootTree is not null)
         {
             targetTree = baseRootTree;
         }
         else if (baseRootTree is not null)
         {
-            var treeItem = await baseRootTree.GetFromPathAsync(new GitPath(dirPath)).ConfigureAwait(false);
+            var treeItem = await baseRootTree.GetFromPathAsync(dirPath).ConfigureAwait(false);
             if (treeItem is not null)
             {
                 targetTree = await treeItem.GetEntryAsync<TreeEntry>().ConfigureAwait(false);
@@ -93,112 +97,98 @@ internal abstract class InternalCommitWriter(TransformationComposer composer)
         return targetTree;
     }
 
-    private static byte[] CreateTreeContent(List<TreeEntryItem> children)
-    {
-        using var stream = new MemoryStream();
-
-        foreach (var child in children)
-        {
-            // Write mode (octal string without leading zeros)
-            var modeBytes = Encoding.ASCII.GetBytes(child.Mode.ToString());
-            stream.Write(modeBytes);
-
-            // Write space separator
-            stream.WriteByte(0x20);
-
-            // Write filename
-            var nameBytes = Encoding.UTF8.GetBytes(child.Name);
-            stream.Write(nameBytes);
-
-            // Write null terminator
-            stream.WriteByte(0x00);
-
-            // Write 20-byte SHA-1 hash
-            var hashBytes = child.Id.Hash.ToArray();
-            stream.Write(hashBytes);
-        }
-
-        return stream.ToArray();
-    }
-
-    private void AddUnmodifiedChildren(Dictionary<GitPath, HashId> modifiedBlobs, Dictionary<string, HashId> modifiedTrees, IObjectResolver objectResolver, TreeEntry targetTree, List<TreeEntryItem> newChildren, string prefix)
+    private void AddUnmodifiedChildren(GitPath path, Dictionary<GitPath, HashId> modifiedBlobs, Dictionary<GitPath, HashId> modifiedTrees, IObjectResolver objectResolver, TreeEntry targetTree, Dictionary<GitPath, TreeEntryItem> newChildren)
     {
         // Add existing children that are not modified
         foreach (var child in targetTree.Children)
         {
-            var childPath = new GitPath(prefix + child.Name);
+            var childPath = path.AddChild(child.Name);
             bool isModified = false;
 
             // Check if this child is directly modified (blob change)
             if (modifiedBlobs.TryGetValue(childPath, out var newBlobId))
             {
-                isModified = AddModifiedBlobChild(objectResolver, newChildren, child, childPath, newBlobId);
+                AddModifiedBlobChild(objectResolver, newChildren, child, childPath, newBlobId);
+                isModified = true;
                 // If removed (newBlobId.IsNull), don't add to new children
             }
             else if (child.Mode.EntryType == EntryType.Tree)
             {
-                isModified = AddModifiedSubtreeChild(modifiedTrees, objectResolver, newChildren, prefix, child, isModified);
+                isModified = AddModifiedSubtreeChild(modifiedTrees, objectResolver, newChildren, childPath, child, isModified);
             }
 
             // If not modified, keep the existing child
             if (!isModified)
             {
-                newChildren.Add(child);
+                newChildren[childPath] = child;
             }
         }
     }
 
-    private bool AddModifiedBlobChild(IObjectResolver objectResolver, List<TreeEntryItem> newChildren, TreeEntryItem child, GitPath childPath, HashId newBlobId)
+    private void AddModifiedBlobChild(IObjectResolver objectResolver, Dictionary<GitPath, TreeEntryItem> newChildren, TreeEntryItem child, GitPath childPath, HashId newBlobId)
     {
-        var isModified = true;
         if (!newBlobId.IsNull) // Not removed
         {
             var fileMode = composer.Changes.TryGetValue(childPath, out var change) && change.FileMode is not null ?
                 change.FileMode :
                 child.Mode;
             var newChild = new TreeEntryItem(fileMode, child.Name, newBlobId, objectResolver.GetAsync<Entry>);
-            newChildren.Add(newChild);
+            newChildren[childPath] = newChild;
         }
-
-        return isModified;
     }
 
-    private static bool AddModifiedSubtreeChild(Dictionary<string, HashId> modifiedTrees, IObjectResolver objectResolver, List<TreeEntryItem> newChildren, string prefix, TreeEntryItem child, bool isModified)
+    private static bool AddModifiedSubtreeChild(Dictionary<GitPath, HashId> modifiedTrees, IObjectResolver objectResolver, Dictionary<GitPath, TreeEntryItem> newChildren, GitPath path, TreeEntryItem child, bool isModified)
     {
         // Check if any subtree is modified
-        var childTreePath = prefix + child.Name;
-        if (modifiedTrees.TryGetValue(childTreePath, out var newTreeId))
+        if (modifiedTrees.TryGetValue(path, out var newTreeId))
         {
             isModified = true;
             var newChild = new TreeEntryItem(child.Mode, child.Name, newTreeId, objectResolver.GetAsync<Entry>);
-            newChildren.Add(newChild);
+            newChildren[path] = newChild;
         }
 
         return isModified;
     }
 
-    private void AddUntrackedChildren(Dictionary<GitPath, HashId> modifiedBlobs, IObjectResolver objectResolver, List<TreeEntryItem> newChildren, string prefix)
+    private void AddUntrackedChildren(GitPath path, Dictionary<GitPath, HashId> modifiedBlobs, IObjectResolver objectResolver, Dictionary<GitPath, TreeEntryItem> newChildren)
     {
         // Add new files that don't exist in the original tree
-        foreach (var (path, blobId) in modifiedBlobs)
+        foreach (var (blobPath, id) in modifiedBlobs)
         {
-            if (blobId.IsNull || !path.ToString().StartsWith(prefix, StringComparison.Ordinal))
+            if (TryExtractDirectRelativePath(id, blobPath, path, newChildren, out var name))
             {
-                continue;
+                var fileMode = composer.Changes.TryGetValue(blobPath, out var change) && change.FileMode is not null ?
+                    change.FileMode :
+                    FileMode.RegularFile;
+                var newChild = new TreeEntryItem(fileMode, name, id, objectResolver.GetAsync<Entry>);
+                newChildren[blobPath] = newChild;
             }
-
-            var relativePath = path.ToString()[prefix.Length..];
-            if (relativePath.Contains('/') || newChildren.Any(c => c.Name == relativePath)) // Direct child and not already added
-            {
-                continue;
-            }
-
-            var fileMode = composer.Changes.TryGetValue(path, out var change) && change.FileMode is not null ?
-                change.FileMode :
-                FileMode.RegularFile;
-            var newChild = new TreeEntryItem(fileMode, relativePath, blobId, objectResolver.GetAsync<Entry>);
-            newChildren.Add(newChild);
         }
+    }
+
+    private static void AddDirectTrees(GitPath path, Dictionary<GitPath, HashId> modifiedTrees, IObjectResolver objectResolver, Dictionary<GitPath, TreeEntryItem> newChildren)
+    {
+        // Add trees that don't exist in the original tree
+        foreach (var (treePath, id) in modifiedTrees)
+        {
+            if (TryExtractDirectRelativePath(id, treePath, path, newChildren, out var name))
+            {
+                var newChild = new TreeEntryItem(new(ObjectType.Tree), name, id, objectResolver.GetAsync<Entry>);
+                newChildren[treePath] = newChild;
+            }
+        }
+    }
+
+    private static bool TryExtractDirectRelativePath(HashId id, GitPath path, GitPath dirPath, Dictionary<GitPath, TreeEntryItem> newChildren, [NotNullWhen(true)] out string? name)
+    {
+        // Direct child and not already added
+        if (!id.IsNull && path.Length - 1 == dirPath.Length && path.Parent == dirPath && !newChildren.ContainsKey(path))
+        {
+            name = path.Name;
+            return true;
+        }
+        name = null;
+        return false;
     }
 
     protected static byte[] CreateCommitContent(CommitEntry commit, HashId newTreeId)
