@@ -13,28 +13,23 @@ internal class LooseCommitWriter(TransformationComposer composer, IRepositoryInf
     {
         using var looseWriter = new LooseWriter(info.Path, fileSystem);
         var modifiedBlobs = new Dictionary<GitPath, HashId>();
-        var modifiedTrees = new Dictionary<string, HashId>();
+        var modifiedTrees = new Dictionary<GitPath, HashId>();
         var objectResolver = commit.ObjectResolver;
 
         // Step 1: Process all blob changes and write them as loose objects
         await ProcessBlobChangesForLooseAsync(looseWriter, modifiedBlobs).ConfigureAwait(false);
 
         // Step 2: Build the new tree hierarchy from bottom up using shared method
-        var newRootTreeId = await BuildTreeHierarchySharedAsync(
-            baseRootTree, modifiedBlobs, modifiedTrees, objectResolver,
-            async (baseRoot, dirPath, blobs, trees, resolver) =>
-                await ProcessDirectorySharedAsync(baseRoot, dirPath, blobs, trees, resolver,
-                    async (treeId, treeContent) =>
-                    {
-                        await looseWriter.WriteObjectAsync(EntryType.Tree, treeContent).ConfigureAwait(false);
-                        return true;
-                    }).ConfigureAwait(false)
+        var newRootTreeId = await BuildTreeHierarchyAsync(modifiedBlobs,
+            async (dirPath) =>
+                await ProcessDirectoryAsync(baseRootTree, dirPath, modifiedBlobs, modifiedTrees, objectResolver, async (treeId, treeContent) =>
+                {
+                    await looseWriter.WriteObjectAsync(EntryType.Tree, treeContent).ConfigureAwait(false);
+                }).ConfigureAwait(false)
         ).ConfigureAwait(false);
 
         // Step 3: Create and write the new commit as a loose object
-        var result = await LooseCommitWriter.CreateNewCommitForLooseAsync(looseWriter, commit, newRootTreeId).ConfigureAwait(false);
-
-        return result;
+        return await CreateNewCommitForLooseAsync(looseWriter, commit, newRootTreeId).ConfigureAwait(false);
     }
 
     private async Task ProcessBlobChangesForLooseAsync(LooseWriter looseWriter, Dictionary<GitPath, HashId> modifiedBlobs)

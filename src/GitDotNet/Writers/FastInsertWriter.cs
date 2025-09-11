@@ -1,7 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Microsoft.Extensions.Logging;
-using static GitDotNet.TransformationComposer;
 
 namespace GitDotNet.Writers;
 
