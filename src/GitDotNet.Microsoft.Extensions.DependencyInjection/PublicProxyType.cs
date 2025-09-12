@@ -51,7 +51,7 @@ internal static class PublicProxyType
 
     private static TypeBuilder DefineProxyTypeBuilder(Type type) =>
         _moduleBuilder.DefineType(
-            $"{type.Namespace}.Generated.{type.Name}CtorProxy",
+            $"{type.Namespace}.Generated.{type.Name}CtorProxy.{Guid.NewGuid():n}",
             TypeAttributes.Public | TypeAttributes.Class,
             type);
 
