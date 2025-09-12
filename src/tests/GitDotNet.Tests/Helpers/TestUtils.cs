@@ -12,6 +12,6 @@ public static class TestUtils
             info.Attributes = FileAttributes.Normal;
         }
 
-        directory.Delete(true);
+         directory.Delete(true);
     }
 }
