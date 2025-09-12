@@ -218,6 +218,29 @@ public class GitConnectionTests
     }
 
     [Test]
+    public async Task RemoveAllBlobsShouldRemoveAllEmptyTrees()
+    {
+        // Arrange & Act
+        var (sut, _, commit) = await CreateCommitWithTransformation(c =>
+        {
+            c.Remove("Applications/f3agr4hyae6c/Pages/e6s826f85e3y/Resources/Path5clrlrb74r9y/File2ckkuulpl7na.txt");
+            c.Remove("Applications/f3agr4hyae6c/Pages/e6s826f85e3y/Resources/Pathcw9wieqxqybr/Filelblbbut304h8.txt");
+            c.Remove("Applications/f3agr4hyae6c/Pages/e6s826f85e3y/Resources/Pathh3ueygkbggy0/Fileatqbjcfy9s06.txt");
+            c.Remove("Applications/f3agr4hyae6c/Pages/e6s826f85e3y/Resources/Pathj0kqc9at7fp1/Fileb30n5ygxp548.txt");
+            c.Remove("Applications/f3agr4hyae6c/Pages/e6s826f85e3y/Resources/Pathsei6a8olviai/Filex12dfj0urvpv.txt");
+        });
+
+        using (sut)
+        {
+            // Assert
+            var head = await sut.GetCommittishAsync("HEAD");
+            var tree = await head.GetRootTreeAsync();
+            (await tree.GetFromPathAsync("Applications/f3agr4hyae6c/Pages/e6s826f85e3y/Resources")).Should().BeNull("All files and empty trees should be removed");
+            (await tree.GetFromPathAsync("Applications/f3agr4hyae6c/Pages/e6s826f85e3y")).Should().NotBeNull("Parent trees should remain");
+        }
+    }
+
+    [Test]
     public async Task AddCommitWithoutUpdatingBranch()
     {
         // Arrange & Act
