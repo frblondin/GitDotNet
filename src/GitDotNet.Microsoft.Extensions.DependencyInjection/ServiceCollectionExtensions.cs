@@ -32,7 +32,6 @@ internal static class ServiceCollectionExtensions
         type :
         PublicProxyType.Get(type);
 
-
     private static TFactory CreateFactory<TFactory>(IServiceProvider serviceProvider, Type concreteType)
         where TFactory : class
     {
