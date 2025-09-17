@@ -1,3 +1,6 @@
+![NuGet Version](https://img.shields.io/nuget/vpre/GitDotNet?label=GitObjectDb)
+![NuGet Version](https://img.shields.io/nuget/vpre/GitDotNet.Microsoft.Extensions.DependencyInjection?label=GitDotNet.Microsoft.Extensions.DependencyInjection)
+
 GitDotNet is a .NET library designed to read Git repositories in a fully native .NET environment. It is optimized for minimal memory footprint and efficient data retrieval from repositories.
 
 It also supports writing, but it doesn't write itself: it uses git [fast-import](https://git-scm.com/docs/git-fast-import) to write objects and refs to the repository. This guarantees best writing performance, safe git data writing, and avoid having to reinvent the wheel (object compression...).
