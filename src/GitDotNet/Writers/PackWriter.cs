@@ -154,12 +154,9 @@ internal class PackWriter : IDisposable
         Dictionary<HashId, GitPath> entryPaths, int maxDeltaDepth, int windowSize, CancellationToken cancellationToken)
     {
         // Create optimizer instance with context
-        var optimizer = new PackOptimization(previousRootTree, entryPaths, maxDeltaDepth, windowSize, _loggerFactory?.CreateLogger<PackOptimization>());
+        var optimizer = new PackOptimization(previousRootTree, entryPaths, maxDeltaDepth, windowSize, PackOptimization.DefaultSlidingWindowSize, _loggerFactory?.CreateLogger<PackOptimization>());
         var optimizedEntries = await optimizer.OptimizeEntriesForDeltaCompressionAsync(_entries, cancellationToken).ConfigureAwait(false);
 
-        // Sort entries in dependency order for pack writing (bases before deltas)
-        // but keep index entries sorted by HashId as required by Git's index format
-        var packSortedEntries = SortEntriesForDeltaChains(optimizedEntries);
         var indexSortedEntries = optimizedEntries.OrderBy(e => e.Id).ToList();
 
         await using var packStream = _fileSystem.File.Create(_temporaryPackPath);
@@ -168,7 +165,7 @@ internal class PackWriter : IDisposable
         _indexCryptoStream = new CryptoStream(_indexBaseStream, _indexSha1, CryptoStreamMode.Write);
 
         // Write pack header
-        await PackFileOperations.WritePackHeaderAsync(packStream, packSortedEntries.Count, _logger).ConfigureAwait(false);
+        await PackFileOperations.WritePackHeaderAsync(packStream, optimizedEntries.Count, _logger).ConfigureAwait(false);
 
         // Write index header and fanout table - must use HashId sorted order
         await PackIndexOperations.WriteIndexHeaderAsync(_indexCryptoStream).ConfigureAwait(false);
@@ -178,64 +175,12 @@ internal class PackWriter : IDisposable
         await WriteObjectHashesToIndexAsync(_indexCryptoStream, indexSortedEntries, cancellationToken).ConfigureAwait(false);
 
         // Write pack entries in dependency order, but CRC32 values in HashId order
-        await WritePackEntriesAndCrc32SimultaneouslyAsync(packStream, _indexCryptoStream, packSortedEntries, indexSortedEntries, cancellationToken).ConfigureAwait(false);
+        await WritePackEntriesAndCrc32SimultaneouslyAsync(packStream, _indexCryptoStream, optimizedEntries, indexSortedEntries, cancellationToken).ConfigureAwait(false);
 
         // Write pack file offsets section to index (in HashId order)
         await WritePackFileOffsetsToIndexAsync(_indexCryptoStream, indexSortedEntries).ConfigureAwait(false);
 
         await packStream.FlushAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>Sorts entries to ensure delta bases are written before their dependents.</summary>
-    private List<PackEntry> SortEntriesForDeltaChains(List<PackEntry> entries)
-    {
-        var result = new List<PackEntry>();
-        var processed = new HashSet<HashId>();
-        var entryById = entries.ToDictionary(e => e.Id);
-
-        // First pass: Add all non-delta entries (bases)
-        foreach (var entry in entries.Where(e => !e.IsDelta))
-        {
-            result.Add(entry);
-            processed.Add(entry.Id);
-        }
-
-        // Second pass: Add delta entries in dependency order
-        var remaining = entries.Where(e => e.IsDelta).ToList();
-        var maxIterations = remaining.Count * 2; // Prevent infinite loops
-        var iteration = 0;
-
-        while (remaining.Count > 0 && iteration < maxIterations)
-        {
-            iteration++;
-            var addedThisRound = new List<PackEntry>();
-
-            for (int i = remaining.Count - 1; i >= 0; i--)
-            {
-                var entry = remaining[i];
-
-                // Check if the base is already processed or is in our current list of bases
-                if (entry.BaseId != null &&
-                    (processed.Contains(entry.BaseId) || entryById.ContainsKey(entry.BaseId)))
-                {
-                    result.Add(entry);
-                    processed.Add(entry.Id);
-                    addedThisRound.Add(entry);
-                    remaining.RemoveAt(i);
-                }
-            }
-
-            // If we didn't make progress, add remaining entries to avoid infinite loop
-            if (addedThisRound.Count == 0 && remaining.Count > 0)
-            {
-                _logger?.LogWarning("Could not resolve all delta dependencies, adding remaining {Count} entries", remaining.Count);
-                result.AddRange(remaining);
-                break;
-            }
-        }
-
-        _logger?.LogDebug("Sorted {Count} entries for delta chains in {Iterations} iterations", result.Count, iteration);
-        return result;
     }
 
     /// <summary>Writes pack entries and their CRC32 values, handling the different sort orders.</summary>

@@ -131,49 +131,7 @@ internal static class DeltaCompression
         }).ConfigureAwait(false);
     }
 
-    /// <summary>Pre-builds hash tables for all entries to avoid rebuilding them repeatedly.</summary>
-    /// <param name="typeEntries">The list of entries to build hash tables for.</param>
-    /// <param name="windowSize">The window size for rolling hash calculations.</param>
-    /// <returns>A dictionary mapping entry IDs to their hash tables.</returns>
-    public static Dictionary<HashId, Dictionary<uint, List<int>>> BuildEntryHashTables(List<PackEntry> typeEntries, int windowSize = DefaultWindowSize)
-    {
-        var result = new Dictionary<HashId, Dictionary<uint, List<int>>>();
-
-        // Use parallel processing for building hash tables when we have many entries
-        if (typeEntries.Count > 10)
-        {
-            var partitioner = Partitioner.Create(typeEntries, true);
-            var lockObject = new object();
-
-            Parallel.ForEach(partitioner, entry =>
-            {
-                if (!result.ContainsKey(entry.Id))
-                {
-                    var hashTable = BuildHashTable(entry.Data, windowSize);
-
-                    lock (lockObject)
-                    {
-                        result.TryAdd(entry.Id, hashTable);
-                    }
-                }
-            });
-        }
-        else
-        {
-            // Use sequential processing for small numbers of entries
-            foreach (var entry in typeEntries.Where(entry => !result.ContainsKey(entry.Id)))
-            {
-                result[entry.Id] = BuildHashTable(entry.Data, windowSize);
-            }
-        }
-
-        return result;
-    }
-
     /// <summary>Builds a hash table for the given data for efficient delta matching.</summary>
-    /// <param name="data">The data to build hash table for.</param>
-    /// <param name="windowSize">The window size for rolling hash calculations.</param>
-    /// <returns>A hash table mapping hash values to byte positions.</returns>
     public static Dictionary<uint, List<int>> BuildHashTable(byte[] data, int windowSize = DefaultWindowSize)
     {
         var hashTable = new Dictionary<uint, List<int>>();

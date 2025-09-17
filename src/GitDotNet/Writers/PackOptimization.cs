@@ -1,28 +1,44 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 
 namespace GitDotNet.Writers;
-
-/// <summary>Handles delta optimization for pack entries.</summary>
 internal sealed class PackOptimization(
     TreeEntry? previousRootTree,
     Dictionary<HashId, GitPath> entryPaths,
     int maxDepth = PackOptimization.DefaultMaxDeltaDepth,
     int windowSize = DeltaCompression.DefaultWindowSize,
+    int slidingWindowSize = PackOptimization.DefaultSlidingWindowSize,
     ILogger<PackOptimization>? logger = null)
 {
-    private const int MinDeltaSavings = 50; // Minimum bytes saved to create delta
-    private const int MaxDeltaDepth = 50; // Maximum allowed delta chain depth for safety
+    /// <summary>Minimum bytes saved to create delta.</summary>
+    private const int MinDeltaSavings = 50;
 
     /// <summary>Gets the default maximum delta chain depth.</summary>
-    public const int DefaultMaxDeltaDepth = 10;
+    public const int DefaultMaxDeltaDepth = 50;
 
-    private readonly int _maxDepth = Math.Clamp(maxDepth, 1, MaxDeltaDepth);
-    private readonly HashSet<HashId> _processedEntries = [];
-    private readonly Dictionary<HashId, int> _deltaChainDepth = []; // Track delta chain depths
+    /// <summary>Gets the default sliding window size for recent entries.</summary>
+    public const int DefaultSlidingWindowSize = 10;
 
     // Simple cache for delta scores to avoid recalculating expensive operations
-    private readonly Dictionary<(HashId target, HashId source), int> _deltaScoreCache = [];
-    private const int MaxCacheSize = 10000; // Limit cache size to prevent memory issues
+    private sealed record class EntryData(PackEntry Entry, GitPath? Path, Dictionary<uint, List<int>> HashTables)
+    {
+        public EntryData? Base { get; set; }
+
+        public int Depth
+        {
+            get
+            {
+                var result = 0;
+                var @base = Base;
+                while (@base != null)
+                {
+                    @base = @base.Base;
+                    result++;
+                }
+                return result;
+            }
+        }
+    }
 
     /// <summary>Optimizes entries for delta compression by finding best base objects and creating deltas.</summary>
     /// <param name="entries">The entries to optimize.</param>
@@ -31,14 +47,15 @@ internal sealed class PackOptimization(
     public async Task<List<PackEntry>> OptimizeEntriesForDeltaCompressionAsync(List<PackEntry> entries, CancellationToken cancellationToken = default)
     {
         logger?.LogDebug("Optimizing entries for delta compression with max depth: {MaxDepth}, previous tree: {HasPreviousTree}",
-            _maxDepth, previousRootTree != null);
+            maxDepth, previousRootTree != null);
 
         var result = new List<PackEntry>();
 
-        foreach (var typeGroup in entries.GroupBy(e => e.Type))
+        foreach (var typeGroup in entries.DistinctBy(e => e.Id).GroupBy(e => e.Type))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await ProcessTypeGroupAsync(typeGroup, result).ConfigureAwait(false);
+            var optimizedEntries = await ProcessTypeGroupAsync(typeGroup, cancellationToken).ConfigureAwait(false);
+            result.AddRange(optimizedEntries);
         }
 
         logger?.LogDebug("Delta optimization complete. Total entries: {Count}", result.Count);
@@ -46,307 +63,149 @@ internal sealed class PackOptimization(
     }
 
     /// <summary>Processes a group of entries of the same type for delta optimization.</summary>
-    private async Task ProcessTypeGroupAsync(IGrouping<EntryType, PackEntry> typeGroup, List<PackEntry> result)
+    private async Task<IList<PackEntry>> ProcessTypeGroupAsync(IGrouping<EntryType, PackEntry> typeGroup, CancellationToken cancellationToken = default)
     {
         var typeEntries = typeGroup.OrderBy(e => e.Data.Length).ToList();
         logger?.LogDebug("Processing {Count} entries of type {Type}", typeEntries.Count, typeGroup.Key);
 
-        var hashTableCache = DeltaCompression.BuildEntryHashTables(typeEntries, windowSize);
+        var fullData = BuildEntryHashTables(typeEntries);
+        var result = new PackEntry[fullData.Length];
 
-        // Process in batches to avoid memory pressure with large numbers of entries
-        var batchSize = Math.Min(100, typeEntries.Count);
-        for (int batchStart = 0; batchStart < typeEntries.Count; batchStart += batchSize)
+        // Prefer partitioning to allow sequential processing within each partition,
+        // which helps with sliding window locality
+        // Note that depth check might fail when first items of range use last items of previous ranges,
+        // since in this case the depth of these dependencies have not yet been updated
+        var rangeSize = Math.Max(fullData.Length / Environment.ProcessorCount, slidingWindowSize);
+        var partitioner = Partitioner.Create(0, fullData.Length, rangeSize);
+        await Parallel.ForEachAsync(partitioner.GetDynamicPartitions(), cancellationToken, async (indices, ct) =>
         {
-            var batchEnd = Math.Min(batchStart + batchSize, typeEntries.Count);
-            var batch = typeEntries.GetRange(batchStart, batchEnd - batchStart);
+            ct.ThrowIfCancellationRequested();
 
-            foreach (var entry in batch.Where(entry => !_processedEntries.Contains(entry.Id)))
+            for (int i = indices.Item1; i < indices.Item2; i++)
             {
-                await ProcessSingleEntryAsync(entry, typeEntries, hashTableCache, result).ConfigureAwait(false);
+                var entry = fullData[i];
+                var count = Math.Clamp(i - 1, 0, slidingWindowSize);
+                var candidates = count > 0 ? Enumerable.Range(1, count).Select(j => fullData[i - j]) : [];
+                var optimized = await FindBestDeltaBaseAsync(entry, candidates).ConfigureAwait(false);
+                result[i] = optimized;
             }
-
-            // Clear some cache entries between batches to manage memory
-            if (_deltaScoreCache.Count <= MaxCacheSize * 0.8)
-            {
-                continue;
-            }
-
-            var keysToRemove = _deltaScoreCache.Keys.Take(MaxCacheSize / 4).ToList();
-            foreach (var keyToRemove in keysToRemove)
-            {
-                _deltaScoreCache.Remove(keyToRemove);
-            }
-        }
+        }).ConfigureAwait(false);
+        return result;
     }
 
-    /// <summary>Processes a single entry for delta optimization.</summary>
-    private async Task ProcessSingleEntryAsync(PackEntry entry, List<PackEntry> typeEntries,
-        Dictionary<HashId, Dictionary<uint, List<int>>> hashTableCache, List<PackEntry> result)
+    private EntryData[] BuildEntryHashTables(List<PackEntry> entries)
     {
-        var deltaBase = await FindBestDeltaBaseAsync(entry, typeEntries, hashTableCache).ConfigureAwait(false);
+        var result = new EntryData[entries.Count];
 
-        if (deltaBase != null)
+        // Use parallel processing for building hash tables when we have many entries
+        Parallel.For(0, entries.Count, i =>
         {
-            // Check if base is already processed to determine delta type
-            var useOfsDelta = _processedEntries.Contains(deltaBase.Id);
+            var entry = entries[i];
+            entryPaths.TryGetValue(entry.Id, out var path);
+            result[i] = new(entry, path, DeltaCompression.BuildHashTable(entry.Data, windowSize));
+        });
 
-            var deltaEntry = await CreateDeltaEntryAsync(entry, deltaBase, hashTableCache, useOfsDelta).ConfigureAwait(false);
-            if (deltaEntry != null)
-            {
-                AddDeltaEntryWithBase(deltaEntry, deltaBase, result, typeEntries);
-                return;
-            }
-        }
-
-        // No suitable delta base found, add as regular entry
-        AddRegularEntry(entry, result);
+        return result;
     }
 
-    /// <summary>Adds a delta entry along with its base to the result, ensuring the base is added first.</summary>
-    private void AddDeltaEntryWithBase(PackEntry deltaEntry, PackEntry baseEntry,
-        List<PackEntry> result, List<PackEntry> typeEntries)
+    private async Task<PackEntry> FindBestDeltaBaseAsync(EntryData target, IEnumerable<EntryData> candidates)
     {
-        // Only add the base entry if it's from our original entries list (not from previous tree)
-        var isBaseFromOriginalEntries = typeEntries.Any(e => e.Id.Equals(baseEntry.Id));
-
-        if (isBaseFromOriginalEntries && !_processedEntries.Contains(baseEntry.Id))
-        {
-            result.Add(baseEntry);
-            _processedEntries.Add(baseEntry.Id);
-            logger?.LogDebug("Added base entry: {BaseId}", baseEntry.Id);
-        }
-
-        result.Add(deltaEntry);
-        _processedEntries.Add(deltaEntry.Id);
-
-        // Track delta chain depth - this entry's depth is base depth + 1
-        var baseDepth = _deltaChainDepth.GetValueOrDefault(baseEntry.Id, 0);
-        var currentDepth = baseDepth + 1;
-        _deltaChainDepth[deltaEntry.Id] = currentDepth;
-
-        logger?.LogDebug("Added delta entry: {EntryId} -> {BaseId} (depth: {Depth}) [base from previous tree: {FromPreviousTree}]",
-            deltaEntry.Id, baseEntry.Id, currentDepth, !isBaseFromOriginalEntries);
-    }
-
-    /// <summary>Adds a regular (non-delta) entry to the result.</summary>
-    private void AddRegularEntry(PackEntry entry, List<PackEntry> result)
-    {
-        result.Add(entry);
-        _processedEntries.Add(entry.Id);
-        _deltaChainDepth[entry.Id] = 0; // Base entries have depth 0
-    }
-
-    private async Task<PackEntry?> FindBestDeltaBaseAsync(PackEntry target, List<PackEntry> candidates,
-        Dictionary<HashId, Dictionary<uint, List<int>>> hashTableCache)
-    {
-        if (target.Data.Length < MinDeltaSavings * 2) // Too small for meaningful delta
-            return null;
+        if (target.Entry.Data.Length < MinDeltaSavings * 2) // Too small for meaningful delta
+            return target.Entry;
 
         // First, try to find a similar object from previous root tree if available
-        var (bestBase, bestScore) = await FindBestDeltaBaseFromPreviousTreeAsync(
-            target, hashTableCache, MinDeltaSavings).ConfigureAwait(false);
-
-        // Early termination if we found a very good match from previous tree
-        if (bestScore > target.Data.Length * 0.8) // 80% similarity is excellent
-        {
-            return bestBase;
-        }
+        var (prevTree, prevTreeScore) = await FindBestDeltaBaseFromPreviousTreeAsync(target).ConfigureAwait(false);
 
         // Then check other candidates, but prefer previous tree candidate if it's good enough
-        bestBase = await FindBestDeltaBaseAmongCandidatesAsync(
-            target, candidates, hashTableCache, MinDeltaSavings, bestBase, bestScore).ConfigureAwait(false);
+        var (best, score) = prevTreeScore < target.Entry.Data.Length * 0.8 ?
+            await FindBestDeltaBaseAmongCandidatesAsync(target, candidates, prevTreeScore).ConfigureAwait(false) :
+            default;
 
-        return bestBase;
+        if (prevTreeScore > MinDeltaSavings && prevTreeScore > score)
+        {
+            // Previous tree candidate is the best
+            target.Base = prevTree;
+            // Create ref delta, as previous tree objects are not in the current pack
+            return await CreateDeltaEntryAsync(target, EntryType.RefDelta).ConfigureAwait(false);
+        }
+        else if (best != null)
+        {
+            // Found a better candidate in the current entries
+            target.Base = best;
+            return await CreateDeltaEntryAsync(target, EntryType.OfsDelta).ConfigureAwait(false);
+        }
+        return target.Entry;
     }
 
-    private async Task<(PackEntry? bestBase, int bestScore)> FindBestDeltaBaseFromPreviousTreeAsync(
-        PackEntry target, Dictionary<HashId, Dictionary<uint, List<int>>> hashTableCache, int minSavings)
+    private async Task<(EntryData? bestBase, int bestScore)> FindBestDeltaBaseFromPreviousTreeAsync(EntryData target)
     {
-        if (previousRootTree == null || !entryPaths.TryGetValue(target.Id, out var targetPath))
+        if (previousRootTree == null || target.Path == null)
         {
             return (null, 0);
         }
-
-        var previousCandidate = await TryFindPreviousTreeCandidateAsync(target, targetPath, hashTableCache, minSavings).ConfigureAwait(false);
-        if (previousCandidate == null)
-        {
-            return (null, 0);
-        }
-
-        var bestBase = previousCandidate;
-        var bestScore = await DeltaCompression.CalculateDeltaScoreAsync(
-            target.Data, previousCandidate.Data, hashTableCache[previousCandidate.Id], windowSize).ConfigureAwait(false);
-        logger?.LogDebug("Found previous tree candidate for {TargetId} at path {Path}: score {Score}",
-            target.Id, targetPath, bestScore);
-        return (bestBase, bestScore);
-
-    }
-
-    private async Task<PackEntry?> FindBestDeltaBaseAmongCandidatesAsync(PackEntry target, List<PackEntry> candidates,
-        Dictionary<HashId, Dictionary<uint, List<int>>> hashTableCache, int minSavings, PackEntry? bestBase, int bestScore)
-    {
-        // Pre-filter candidates by size to avoid expensive comparisons
-        var suitableCandidates = candidates.Where(candidate =>
-        {
-            if (candidate.Id == target.Id || _processedEntries.Contains(candidate.Id))
-                return false;
-
-            // Size-based filtering: base shouldn't be more than 2x target size or less than 0.1x
-            var sizeRatio = (double)candidate.Data.Length / target.Data.Length;
-            if (sizeRatio > 2.0 || sizeRatio < 0.1)
-                return false;
-
-            // Check if adding this delta would exceed max depth
-            var candidateDepth = _deltaChainDepth.GetValueOrDefault(candidate.Id, 0);
-            return candidateDepth < _maxDepth;
-        })
-        .OrderBy(c => Math.Abs(c.Data.Length - target.Data.Length)) // Sort by size similarity
-        .Take(Math.Min(50, candidates.Count / 4)) // Limit to at most 50 candidates or 25% of total
-        .ToList();
-
-        foreach (var candidate in from candidate in suitableCandidates
-                                            let sizeDiff = Math.Abs(candidate.Data.Length - target.Data.Length)
-                                            where sizeDiff <= target.Data.Length * 0.5
-                                            select candidate)
-        {
-            var score = await GetCachedDeltaScoreAsync(target, candidate, hashTableCache).ConfigureAwait(false);
-
-            // Only replace if significantly better than previous tree candidate
-            if (score <= bestScore || score <= minSavings)
-            {
-                continue;
-            }
-
-            bestScore = score;
-            bestBase = candidate;
-
-            // Early termination if we found a very good match
-            if (score > target.Data.Length * 0.9) // 90% similarity is excellent
-            {
-                break;
-            }
-        }
-
-        return bestBase;
-    }
-
-    private async Task<int> GetCachedDeltaScoreAsync(PackEntry target, PackEntry source,
-        Dictionary<HashId, Dictionary<uint, List<int>>> hashTableCache)
-    {
-        var cacheKey = (target.Id, source.Id);
-
-        // Check cache first
-        if (_deltaScoreCache.TryGetValue(cacheKey, out var cachedScore))
-        {
-            return cachedScore;
-        }
-
-        // Calculate score if not cached
-        var score = await DeltaCompression.CalculateDeltaScoreAsync(
-            target.Data, source.Data, hashTableCache[source.Id], windowSize).ConfigureAwait(false);
-
-        switch (_deltaScoreCache.Count)
-        {
-            // Cache the result (with size limit)
-            case < MaxCacheSize:
-                _deltaScoreCache[cacheKey] = score;
-                break;
-            case MaxCacheSize:
-            {
-                // Clear some cache entries when we hit the limit
-                var keysToRemove = _deltaScoreCache.Keys.Take(MaxCacheSize / 4).ToList();
-                foreach (var keyToRemove in keysToRemove)
-                {
-                    _deltaScoreCache.Remove(keyToRemove);
-                }
-                _deltaScoreCache[cacheKey] = score;
-                break;
-            }
-        }
-
-        return score;
-    }
-
-    /// <summary>Tries to find a candidate from the previous root tree at the same path.</summary>
-    private async Task<PackEntry?> TryFindPreviousTreeCandidateAsync(PackEntry target, GitPath targetPath,
-        Dictionary<HashId, Dictionary<uint, List<int>>> hashTableCache, int minSavings)
-    {
         try
         {
             // Try to get the object at the same path from the previous tree
-            var previousItem = await previousRootTree!.GetFromPathAsync(targetPath).ConfigureAwait(false);
-            if (previousItem == null)
+            var previousItem = await previousRootTree!.GetFromPathAsync(target.Path!).ConfigureAwait(false);
+            if (previousItem == null || previousItem.Mode.EntryType != target.Entry.Type)
             {
-                logger?.LogDebug("No previous object found at path {Path}", targetPath);
-                return null;
+                logger?.LogDebug("No previous object found at path {Path}", target.Path);
+                return (null, -1);
             }
-
-            // Check if it's the same entry type
-            if (previousItem.Mode.EntryType != target.Type)
-            {
-                logger?.LogDebug("Previous object at path {Path} has different type: {PreviousType} vs {TargetType}",
-                    targetPath, previousItem.Mode.EntryType, target.Type);
-                return null;
-            }
-
-            // Get the actual entry data
-            Entry? previousEntry = target.Type switch
-            {
-                EntryType.Blob => await previousItem.GetEntryAsync<BlobEntry>().ConfigureAwait(false),
-                EntryType.Tree => await previousItem.GetEntryAsync<TreeEntry>().ConfigureAwait(false),
-                _ => null
-            };
-
-            if (previousEntry == null)
-            {
-                logger?.LogDebug("Could not retrieve previous entry at path {Path}", targetPath);
-                return null;
-            }
-
-            // Create a PackEntry for the previous object
-            var previousPackEntry = new PackEntry(target.Type, previousEntry.Id, previousEntry.Data);
-
-            // Build hash table if not already cached
-            if (!hashTableCache.TryGetValue(previousPackEntry.Id, out var value))
-            {
-                value = DeltaCompression.BuildHashTable(previousPackEntry.Data, windowSize);
-                hashTableCache[previousPackEntry.Id] = value;
-            }
+            var previousEntry = await previousItem.GetEntryAsync<Entry>().ConfigureAwait(false);
+            var packEntry = new PackEntry(target.Entry.Type, previousEntry.Id, previousEntry.Data);
+            var hashTable = DeltaCompression.BuildHashTable(packEntry.Data, windowSize);
 
             // Calculate similarity score
-            var score = await DeltaCompression.CalculateDeltaScoreAsync(target.Data, previousPackEntry.Data, value, windowSize).ConfigureAwait(false);
-
-            if (score > minSavings)
-            {
-                logger?.LogDebug("Previous tree candidate at path {Path} has good similarity score: {Score}", targetPath, score);
-                return previousPackEntry;
-            }
-
-            logger?.LogDebug("Previous tree candidate at path {Path} has insufficient similarity score: {Score} < {MinSavings}",
-                targetPath, score, minSavings);
+            var score = await DeltaCompression.CalculateDeltaScoreAsync(target.Entry.Data, packEntry.Data, hashTable, windowSize).ConfigureAwait(false);
+            logger?.LogDebug("Previous tree candidate at path {Path} was found with similarity score: {Score}",
+                target.Path, score);
+            return (new(packEntry, target.Path, hashTable), score);
         }
         catch (Exception ex)
         {
-            logger?.LogDebug(ex, "Error trying to find previous tree candidate at path {Path}", targetPath);
+            logger?.LogDebug(ex, "Error trying to find previous tree candidate at path {Path}", target.Path);
         }
-
-        return null;
+        return (null, -1);
     }
 
-    private async Task<PackEntry?> CreateDeltaEntryAsync(PackEntry target, PackEntry baseEntry,
-        Dictionary<HashId, Dictionary<uint, List<int>>> hashTableCache, bool useOfsDelta)
+    private async Task<(EntryData? Best, int Score)> FindBestDeltaBaseAmongCandidatesAsync(EntryData target, IEnumerable<EntryData> candidates, int bestScore)
     {
-        var deltaData = await DeltaCompression.CreateDeltaAsync(target.Data, baseEntry.Data, hashTableCache[baseEntry.Id], windowSize).ConfigureAwait(false);
+        var filteredCandidates = candidates
+            .Where(c => c.Entry.Data.Length * 50 > target.Entry.Data.Length && c.Entry.Data.Length < target.Entry.Data.Length * 50)
+            .Where(c => c.Depth < maxDepth);
 
-        if (deltaData.Length >= target.Data.Length - MinDeltaSavings)
-            return null; // Delta not worth it
+        logger?.LogDebug("Evaluating filtered candidates for {TargetId}", target.Entry.Id);
 
-        // Choose delta type: OfsDelta is more efficient when base is already written
-        var deltaType = useOfsDelta ? EntryType.OfsDelta : EntryType.RefDelta;
+        var syncLock = new object();
+        (EntryData? Best, int Score) best = default;
+        await Parallel.ForEachAsync(filteredCandidates, async (candidate, ct) =>
+        {
+            // Short-circuit if we already found a very good match
+            if (best.Score > target.Entry.Data.Length * 0.9) return;
 
-        logger?.LogDebug("Created delta: original={OriginalSize}, delta={DeltaSize}, savings={Savings}, type={DeltaType}",
-            target.Data.Length, deltaData.Length, target.Data.Length - deltaData.Length, deltaType);
+            var score = await DeltaCompression.CalculateDeltaScoreAsync(
+                target.Entry.Data, candidate.Entry.Data, candidate.HashTables, windowSize).ConfigureAwait(false);
+            if (score > MinDeltaSavings && score > best.Score)
+            {
+                lock (syncLock)
+                {
+                    if (score > best.Score)
+                    {
+                        best = (candidate, score);
+                    }
+                }
+                logger?.LogDebug("Found better delta base for {TargetId}: {BaseId} with score {Score}",
+                    target.Entry.Id, candidate.Entry.Id, score);
+            }
+        }).ConfigureAwait(false);
 
-        return new PackEntry(deltaType, target.Id, deltaData, baseEntry.Id);
+        return best;
+    }
+
+    private async Task<PackEntry> CreateDeltaEntryAsync(EntryData target, EntryType type)
+    {
+        var data = await DeltaCompression.CreateDeltaAsync(target.Entry.Data, target.Base!.Entry.Data, target.Base.HashTables, windowSize).ConfigureAwait(false);
+        return new PackEntry(type, target.Entry.Id, data, target.Base.Entry.Id);
     }
 }
