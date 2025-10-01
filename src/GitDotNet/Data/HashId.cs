@@ -21,8 +21,12 @@ public sealed partial class HashId : IEquatable<HashId>, IComparable<HashId>, IC
 
     /// <summary>Initializes a new instance of the <see cref="HashId"/> class.</summary>
     /// <param name="hash">The hash value.</param>
+    /// <exception cref="ArgumentNullException">Thrown when hash is null.</exception>
     public HashId(byte[] hash)
     {
+        if (hash == null)
+            throw new ArgumentNullException(nameof(hash));
+        
         if (hash.Length < 4 && hash.Length > 0)
         {
             throw new ArgumentException("The hash must be at least 4 bytes long.", nameof(hash));
@@ -33,7 +37,15 @@ public sealed partial class HashId : IEquatable<HashId>, IComparable<HashId>, IC
 
     /// <summary>Initializes a new instance of the <see cref="HashId"/> class.</summary>
     /// <param name="hash">The hash value.</param>
-    public HashId(string hash) : this(hash.HexToByteArray()) { }
+    /// <exception cref="ArgumentNullException">Thrown when hash is null.</exception>
+    public HashId(string hash)
+    {
+        if (hash == null)
+            throw new ArgumentNullException(nameof(hash));
+        
+        _hash = hash.HexToByteArray();
+        Hash = _hash;
+    }
 
     /// <summary>Gets the hash value.</summary>
     public IReadOnlyList<byte> Hash { get; }
@@ -59,7 +71,7 @@ public sealed partial class HashId : IEquatable<HashId>, IComparable<HashId>, IC
     /// <returns>true if the string was parsed successfully; otherwise, false.</returns>
     public static bool TryParse(string hash, [NotNullWhen(true)] out HashId? result)
     {
-        if (Sha1Pattern().IsMatch(hash) || Sha256Pattern().IsMatch(hash))
+        if (hash != null && (Sha1Pattern().IsMatch(hash) || Sha256Pattern().IsMatch(hash)))
         {
             result = new(hash.HexToByteArray());
             return true;

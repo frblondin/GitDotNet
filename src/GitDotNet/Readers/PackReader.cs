@@ -20,14 +20,14 @@ internal class PackReader(string path, FileOffsetStreamReaderFactory offsetStrea
         Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider) =>
         await GetByOffsetAsync(offset, async () => await ReadAsync(id, offset, dependentEntryProvider).ConfigureAwait(false)).ConfigureAwait(false);
 
-    public Task<UnlinkedEntry> GetByOffsetAsync(long offset, Func<Task<UnlinkedEntry>> provider) =>
+    public virtual Task<UnlinkedEntry> GetByOffsetAsync(long offset, Func<Task<UnlinkedEntry>> provider) =>
         _cache.TryGetValue(offset, out var result) ?
         result :
         _cache.GetOrAdd(offset, provider());
 
-    internal async Task<UnlinkedEntry> ReadAsync(HashId id,
-                                                long offset,
-                                                Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider)
+    internal virtual async Task<UnlinkedEntry> ReadAsync(HashId id,
+                                                        long offset,
+                                                        Func<HashId, Task<UnlinkedEntry>> dependentEntryProvider)
     {
         ObjectDisposedException.ThrowIf(_disposed.IsCancellationRequested, nameof(PackReader));
 

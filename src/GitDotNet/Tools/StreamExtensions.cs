@@ -11,7 +11,7 @@ internal static class StreamExtensions
         var b = stream.ReadByte();
         if (b == -1)
         {
-            throw new InvalidOperationException("Unexpected end of stream.");
+            throw new EndOfStreamException("Unexpected end of stream.");
         }
         return (byte)b;
     }

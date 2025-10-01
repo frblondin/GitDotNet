@@ -2,6 +2,7 @@ using System.IO.Abstractions.TestingHelpers;
 using System.IO.Compression;
 using FakeItEasy;
 using FluentAssertions;
+using GitDotNet.Caching;
 using GitDotNet.Readers;
 using GitDotNet.Tests.Properties;
 using Microsoft.Extensions.Caching.Memory;
@@ -32,7 +33,7 @@ public class ObjectsTests
             looseReaderFactory: _ => looseReader,
             lfsReaderFactory: path => CreateLfsReader(path, fileSystem),
             commitReaderFactory: (_, _) => throw new NotImplementedException(),
-            memoryCache: A.Fake<IMemoryCache>(),
+            enhancedCache: A.Fake<EnhancedObjectCache>(),
             fileSystem: fileSystem);
 
         // Act

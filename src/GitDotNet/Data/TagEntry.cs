@@ -4,7 +4,7 @@ using GitDotNet.Tools;
 namespace GitDotNet;
 
 /// <summary>Represents a Git tag entry.</summary>
-public sealed class TagEntry : Entry
+public class TagEntry : Entry
 {
     private readonly IObjectResolver _objectResolver;
     private readonly Lazy<Content> _content;
@@ -15,6 +15,13 @@ public sealed class TagEntry : Entry
     {
         _objectResolver = objectResolver;
         _content = new(Parse);
+    }
+
+    /// <summary>Parameterless constructor for testing purposes.</summary>
+    public TagEntry() : base(EntryType.Tag, HashId.Empty, [])
+    {
+        _objectResolver = null!;
+        _content = new(() => new Content("", EntryType.Tag, "", null, ""));
     }
 
     /// <summary>Gets the type of the object that the tag points to.</summary>

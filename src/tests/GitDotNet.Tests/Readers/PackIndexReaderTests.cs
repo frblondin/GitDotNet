@@ -1,5 +1,6 @@
 using FakeItEasy;
 using FluentAssertions;
+using GitDotNet.Caching;
 using GitDotNet.Readers;
 using GitDotNet.Tests.Helpers;
 using GitDotNet.Tests.Properties;
@@ -61,7 +62,7 @@ public class PackIndexReaderTests
                 path => CreateLooseReader(path, fileSystem),
                 path => CreateLfsReader(path, fileSystem),
                 (_, _) => A.Fake<CommitGraphReader>(),
-                A.Fake<IMemoryCache>(),
+                A.Fake<EnhancedObjectCache>(),
                 fileSystem,
                 null)));
         sut = new PackIndexReader.Standard(".git/objects/packs/data.idx",

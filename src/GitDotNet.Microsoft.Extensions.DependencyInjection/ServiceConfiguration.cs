@@ -1,4 +1,5 @@
 using GitDotNet;
+using GitDotNet.Caching;
 using GitDotNet.Readers;
 using GitDotNet.Tools;
 using GitDotNet.Writers;
@@ -25,8 +26,10 @@ public static class ServiceConfiguration
         return source
             // Dependencies
             .AddSingleton<IFileSystem, FileSystem>()
+            .AddMemoryCache()
             // Options
             .AddOptions()
+            .Configure<ObjectResolverCacheOptions>(options => { /* Default configuration */ })
             .AddSingleton(sp => { var options = new IGitConnection.Options(); configure?.Invoke(options); return options; })
             .AddMain()
             .AddReaders()
@@ -41,6 +44,7 @@ public static class ServiceConfiguration
 
     private static IServiceCollection AddReaders(this IServiceCollection services) => services
         .AddSingleton<ITreeComparer, TreeComparer>()
+        .AddScoped<GitDotNet.Caching.EnhancedObjectCache>()
         .AddAutoFactory<FileOffsetStreamReaderFactory, FileOffsetStreamReader>(ServiceLifetime.Scoped)
         .AddAutoFactory<CurrentOperationReaderFactory>(ServiceLifetime.Scoped)
         .AddAutoFactory<PackManagerFactory, PackManager>(ServiceLifetime.Scoped)

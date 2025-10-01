@@ -2,6 +2,7 @@ using System.IO.Abstractions.TestingHelpers;
 using System.Text;
 using FluentAssertions;
 using FluentAssertions.Execution;
+using GitDotNet.Caching;
 using GitDotNet.Writers;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -735,6 +736,19 @@ public class PackOptimizationTests
                 return typedEntry;
             }
             return null;
+        }
+
+        public CacheStatistics GetCacheStatistics()
+        {
+            // Return mock statistics for testing
+            return new CacheStatistics
+            {
+                TotalHits = 0,
+                TotalMisses = 0,
+                HitRate = 0.0,
+                CurrentSizeBytes = 0,
+                MaxSizeBytes = 0
+            };
         }
 
         public void Dispose()

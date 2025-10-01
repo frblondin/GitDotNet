@@ -79,4 +79,8 @@ public abstract class Entry : IEquatable<Entry>
     }
 }
 
-internal record class UnlinkedEntry(EntryType Type, HashId Id, byte[] Data);
+internal record class UnlinkedEntry(EntryType Type, HashId Id, byte[] Data)
+{
+    public byte[] Data { get; init; } = Data ?? throw new ArgumentNullException(nameof(Data));
+    public HashId Id { get; init; } = Id ?? throw new ArgumentNullException(nameof(Id));
+};

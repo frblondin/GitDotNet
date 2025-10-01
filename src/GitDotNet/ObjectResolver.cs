@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
 using GitDotNet.Readers;
+using GitDotNet.Caching;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
@@ -19,7 +20,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     private readonly LooseReader _looseObjects;
     private readonly Lazy<CommitGraphReader> _commitReader;
     private readonly LfsReader _lfsReader;
-    private readonly IMemoryCache _memoryCache;
+    private readonly EnhancedObjectCache _enhancedCache;
     private readonly ILogger<ObjectResolver>? _logger;
     private readonly CancellationTokenSource _disposed = new();
     private bool _disposedValue;
@@ -30,7 +31,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         LooseReaderFactory looseReaderFactory,
         LfsReaderFactory lfsReaderFactory,
         CommitGraphReaderFactory commitReaderFactory,
-        IMemoryCache memoryCache,
+        EnhancedObjectCache enhancedCache,
         IFileSystem fileSystem,
         ILogger<ObjectResolver>? logger = null)
     {
@@ -42,7 +43,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
         _looseObjects = looseReaderFactory(Path);
         _commitReader = new(() => commitReaderFactory(Path, this));
         _lfsReader = lfsReaderFactory(fileSystem.Path.Combine(repositoryPath, "lfs", "objects"));
-        _memoryCache = memoryCache;
+        _enhancedCache = enhancedCache;
         PackManager = packManagerFactory(Path);
     }
 
@@ -58,7 +59,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     internal async Task<UnlinkedEntry> GetUnlinkedEntryAsync(HashId id) => await GetUnlinkedEntryAsync(id, throwIfNotFound: true).ConfigureAwait(false);
 
     internal async Task<UnlinkedEntry> GetUnlinkedEntryAsync(HashId id, bool throwIfNotFound) =>
-        (await _memoryCache.GetOrCreateAsync((id, nameof(UnlinkedEntry)),
+        (await _enhancedCache.GetOrCreateAsync((id, nameof(UnlinkedEntry)),
             async entry => {
                 _logger?.LogDebug("Cache miss for UnlinkedEntry {HashId}", id);
                 return await ReadUnlinkedEntryAsync(entry, id, throwIfNotFound).ConfigureAwait(false);
@@ -113,11 +114,11 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     private async Task<UnlinkedEntry> GetDependentObjectAsync(HashId h) => await GetUnlinkedEntryAsync(h, throwIfNotFound: true).ConfigureAwait(false);
 
     public async Task<TEntry> GetAsync<TEntry>(HashId id) where TEntry : Entry =>
-        (await _memoryCache.GetOrCreateAsync((id, typeof(TEntry) == typeof(LogEntry) ? nameof(LogEntry) : nameof(Entry)),
+        (await _enhancedCache.GetOrCreateAsync((id, typeof(TEntry) == typeof(LogEntry) ? nameof(LogEntry) : nameof(Entry)),
                                              async entry => await ReadAsync<TEntry>(entry, id, true).ConfigureAwait(false)).ConfigureAwait(false))!;
 
     public async Task<TEntry?> TryGetAsync<TEntry>(HashId id) where TEntry : Entry =>
-        await _memoryCache.GetOrCreateAsync((id, typeof(TEntry) == typeof(LogEntry) ? nameof(LogEntry) : nameof(Entry)),
+        await _enhancedCache.GetOrCreateAsync((id, typeof(TEntry) == typeof(LogEntry) ? nameof(LogEntry) : nameof(Entry)),
                                             async entry => await ReadAsync<TEntry>(entry, id, false).ConfigureAwait(false)).ConfigureAwait(false);
 
     private async Task<TEntry?> ReadAsync<TEntry>(ICacheEntry entry, HashId id, bool throwIfNotFound) where TEntry : Entry
@@ -213,6 +214,10 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
     internal Entry CreateEntry(UnlinkedEntry entry) =>
         CreateEntry(entry.Type, entry.Id, entry.Data);
 
+    /// <summary>Gets cache performance statistics from the enhanced object cache.</summary>
+    /// <returns>Cache statistics including hit rate, size, and performance metrics.</returns>
+    public CacheStatistics GetCacheStatistics() => _enhancedCache.GetStatistics();
+
     /// <summary>Releases all resources used by the current instance of the <see cref="ObjectResolver"/> class.</summary>
     protected virtual void Dispose(bool disposing)
     {
@@ -224,6 +229,7 @@ internal partial class ObjectResolver : IObjectResolver, IObjectResolverInternal
                 if (_commitReader.IsValueCreated)
                     _commitReader.Value?.Dispose();
                 PackManager?.Dispose();
+                _enhancedCache?.Dispose();
                 _logger?.LogInformation("ObjectResolver disposed.");
             }
             if (!(_disposed?.IsCancellationRequested ?? false))
@@ -262,6 +268,10 @@ public interface IObjectResolver : IDisposable
     /// <param name="id">The hash of the Git object.</param>
     /// <returns>The Git object associated with the specified hash.</returns>
     Task<TEntry?> TryGetAsync<TEntry>(HashId id) where TEntry : Entry;
+
+    /// <summary>Gets cache performance statistics from the enhanced object cache.</summary>
+    /// <returns>Cache statistics including hit rate, size, and performance metrics.</returns>
+    CacheStatistics GetCacheStatistics();
 }
 
 internal interface IObjectResolverInternal
