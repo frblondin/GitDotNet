@@ -57,7 +57,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           NuGetApiKey: ${{ secrets.NUGET_API_KEY }}
       - name: 'Publish: nuget'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nuget
           path: output/nuget
